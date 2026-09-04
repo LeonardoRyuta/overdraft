@@ -35,3 +35,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Third-party licensed source (Agent A raw copies) — do not commit
+spikes/protocol/
