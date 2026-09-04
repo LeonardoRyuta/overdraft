@@ -1,0 +1,247 @@
+# Overdraft live coverage run — Ethereum mainnet
+# captured 2026-09-04 (Day 1). Enumeration: Blockscout keyless logs. Reads: eth_call via publicnode/drpc.
+# NOTE: sample of most-recent commitments, NOT full population. Numbers are live and will drift.
+
+head block 25905230. enumerating live Aqua positions via Blockscout...
+  blockscout page 0: 50 logs, 18 Pushed, 16 distinct positions
+  blockscout page 1: 50 logs, 16 Pushed, 16 distinct positions
+  blockscout page 2: 50 logs, 19 Pushed, 25 distinct positions
+  blockscout page 3: 50 logs, 18 Pushed, 29 distinct positions
+
+29 distinct (maker,app,strategyHash,token) commitments seen. Reading live state via eth_call:
+
+─────────────────────────────────────────────────────────
+maker 0xc6e29bCE1AfC844dc15C0631ccddA19220bA4337
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xa8978592c0b41482a3c7acd41e2fd52cd2b1244b8c479b2d0cd7e15ae271aede
+  token       0x111111111117dC0aa78b770fA6A738034120C302  1INCH (18dp)  tokensCount=2
+  committed   10255.227085070643757056 1INCH  (virtual balance)
+  wallet      0 1INCH
+  allowance   0 (->Aqua) / 0 (->app)
+  backed      0 1INCH  = min(wallet, allowance)
+  COVERAGE    0.00%   ⚠ UNDER-BACKED
+  phantom     10255.227085070643757056 1INCH
+─────────────────────────────────────────────────────────
+maker 0xEf0041E6c9899C77e68C9DCB87111F39E19e19B6
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x42fb3c1f43f8ecd65cafae6f7c72c50f706eb9bda86939c82a2ab6e85eec87bd
+  token       0xc50673EDb3A7b94E8CAD8a7d4E0cD68864E33eDF  PNKSTR (18dp)  tokensCount=2
+  committed   18487.1455881164798612 PNKSTR  (virtual balance)
+  wallet      1450.216311930975182122 PNKSTR
+  allowance   115792089237316195423570985008687907853269984665640564039457.584007913129639935 (->Aqua) / 0 (->app)
+  backed      1450.216311930975182122 PNKSTR  = min(wallet, allowance)
+  COVERAGE    7.84%   ⚠ UNDER-BACKED
+  phantom     17036.929276185504679078 PNKSTR
+─────────────────────────────────────────────────────────
+maker 0xf9C6251bb769Bd04C9D7Eb1599F4e1C5CB3208d3
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x15ac2421c4f3d621e30d9194fab4001324b11478f4f6b2e5b57d175e7b280663
+  token       0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2  WETH (18dp)  tokensCount=2
+  committed   0.73802060649222511 WETH  (virtual balance)
+  wallet      0.479142112417217859 WETH
+  allowance   115792089237316195423570985008687907853269984665640564039457.584007913129639935 (->Aqua) / 0 (->app)
+  backed      0.479142112417217859 WETH  = min(wallet, allowance)
+  COVERAGE    64.92%   ⚠ UNDER-BACKED
+  phantom     0.258878494075007251 WETH
+─────────────────────────────────────────────────────────
+maker 0x3127f2A46BcE49882b41F66c5F9c8D9c541a8f78
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x353a3087a9bf803f7c1f2e1bd5fad327477a5a13766a0765d0c96628ec87fd14
+  token       0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2  WETH (18dp)  tokensCount=2
+  committed   0.99345856982363972 WETH  (virtual balance)
+  wallet      1.99345856982363972 WETH
+  allowance   0.933985883034482101 (->Aqua) / 0 (->app)
+  backed      0.933985883034482101 WETH  = min(wallet, allowance)
+  COVERAGE    94.01%   ⚠ UNDER-BACKED
+  phantom     0.059472686789157619 WETH
+─────────────────────────────────────────────────────────
+maker 0x3127f2A46BcE49882b41F66c5F9c8D9c541a8f78
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x353a3087a9bf803f7c1f2e1bd5fad327477a5a13766a0765d0c96628ec87fd14
+  token       0xdAC17F958D2ee523a2206206994597C13D831ec7  USDT (6dp)  tokensCount=2
+  committed   2476.346398 USDT  (virtual balance)
+  wallet      5116.157378 USDT
+  allowance   2403.77201 (->Aqua) / 0 (->app)
+  backed      2403.77201 USDT  = min(wallet, allowance)
+  COVERAGE    97.07%   ⚠ UNDER-BACKED
+  phantom     72.574388 USDT
+─────────────────────────────────────────────────────────
+maker 0x4f0f7E45405Ef9A0B2D347a57F6cB7061c46912a
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xf64200167af72ce982a25eab70b0d19022a3574c1750418ad0f746a7324acbda
+  token       0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2  WETH (18dp)  tokensCount=2
+  committed   6.1836309529867135 WETH  (virtual balance)
+  wallet      6.1836310565725682 WETH
+  allowance   115792089237316195423570985008687907853269984665640564039457.584007913129639935 (->Aqua) / 0 (->app)
+  backed      6.1836310565725682 WETH  = min(wallet, allowance)
+  COVERAGE    100.00% 
+  phantom     0 WETH
+─────────────────────────────────────────────────────────
+maker 0x333333336Bc1641Afd60bD85735705a3c7a00dA6
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xb97919233889806b9ce6baef94918949c81531b4844a4d08e1c22a402b042f1d
+  token       0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0  wstETH (18dp)  tokensCount=2
+  committed   0.721441380438138023 wstETH  (virtual balance)
+  wallet      0.721441437875932989 wstETH
+  allowance   115792089237316195423570985008687907853269984665640564039454.846128299416396303 (->Aqua) / 0 (->app)
+  backed      0.721441437875932989 wstETH  = min(wallet, allowance)
+  COVERAGE    100.00% 
+  phantom     0 wstETH
+─────────────────────────────────────────────────────────
+maker 0x4f0f7E45405Ef9A0B2D347a57F6cB7061c46912a
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xe82e383f9cf6e58ec7964bd595b16082b42386793d298f4d427e284576902698
+  token       0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599  WBTC (8dp)  tokensCount=2
+  committed   0.11830631 WBTC  (virtual balance)
+  wallet      0.11830642 WBTC
+  allowance   1157920892373161954235709850086879078532699846656405640394575840079121.93127367 (->Aqua) / 0 (->app)
+  backed      0.11830642 WBTC  = min(wallet, allowance)
+  COVERAGE    100.00% 
+  phantom     0 WBTC
+─────────────────────────────────────────────────────────
+maker 0x333333336Bc1641Afd60bD85735705a3c7a00dA6
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xb97919233889806b9ce6baef94918949c81531b4844a4d08e1c22a402b042f1d
+  token       0x111111111117dC0aa78b770fA6A738034120C302  1INCH (18dp)  tokensCount=2
+  committed   11051.776567835254422204 1INCH  (virtual balance)
+  wallet      11071.243193993725925617 1INCH
+  allowance   115792089237316195423570985008687907853269984665640563969615.887567829268519331 (->Aqua) / 0 (->app)
+  backed      11071.243193993725925617 1INCH  = min(wallet, allowance)
+  COVERAGE    100.18% 
+  phantom     0 1INCH
+─────────────────────────────────────────────────────────
+maker 0xf9C6251bb769Bd04C9D7Eb1599F4e1C5CB3208d3
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xf6c2d36aa89ad620e2b395bc25c73ea7359ce63aba33fdc647d4a8ad56822827
+  token       0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984  UNI (18dp)  tokensCount=2
+  committed   87.267492130986596955 UNI  (virtual balance)
+  wallet      88.823805395888131869 UNI
+  allowance   79228162514.264337593543950335 (->Aqua) / 0 (->app)
+  backed      88.823805395888131869 UNI  = min(wallet, allowance)
+  COVERAGE    101.78% 
+  phantom     0 UNI
+─────────────────────────────────────────────────────────
+maker 0x4f0f7E45405Ef9A0B2D347a57F6cB7061c46912a
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xe82e383f9cf6e58ec7964bd595b16082b42386793d298f4d427e284576902698
+  token       0x111111111117dC0aa78b770fA6A738034120C302  1INCH (18dp)  tokensCount=2
+  committed   214248.223101007970771033 1INCH  (virtual balance)
+  wallet      224822.055987511534349831 1INCH
+  allowance   115792089237316195423570985008687907853269984665640538715747.362054445307323695 (->Aqua) / 0 (->app)
+  backed      224822.055987511534349831 1INCH  = min(wallet, allowance)
+  COVERAGE    104.94% 
+  phantom     0 1INCH
+─────────────────────────────────────────────────────────
+maker 0xE00D6D9AF658A877335fED28FacD0e28EE8518D2
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xd9821fb1576f5eee56cad5d1ca0a3f6b0513827d405bb1c38ea487ee9a0ad041
+  token       0x6B175474E89094C44Da98b954EedeAC495271d0F  DAI (18dp)  tokensCount=2
+  committed   8261.514297483646278938 DAI  (virtual balance)
+  wallet      9334.332820939198056426 DAI
+  allowance   115792089237316195423570985008687907853269984665640564039457.584007913129639935 (->Aqua) / 0 (->app)
+  backed      9334.332820939198056426 DAI  = min(wallet, allowance)
+  COVERAGE    112.99% 
+  phantom     0 DAI
+─────────────────────────────────────────────────────────
+maker 0x4f0f7E45405Ef9A0B2D347a57F6cB7061c46912a
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xf64200167af72ce982a25eab70b0d19022a3574c1750418ad0f746a7324acbda
+  token       0x111111111117dC0aa78b770fA6A738034120C302  1INCH (18dp)  tokensCount=2
+  committed   175309.784129622323271758 1INCH  (virtual balance)
+  wallet      224822.055987511534349831 1INCH
+  allowance   115792089237316195423570985008687907853269984665640538715747.362054445307323695 (->Aqua) / 0 (->app)
+  backed      224822.055987511534349831 1INCH  = min(wallet, allowance)
+  COVERAGE    128.24% 
+  phantom     0 1INCH
+─────────────────────────────────────────────────────────
+maker 0x235B85091b154c3c02c622A7b3b9353248932e85
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xfd354f9753370bc975b5ea3f85bc2a373a771676639193c6a2a1c1e1f363cdd4
+  token       0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48  USDC (6dp)  tokensCount=2
+  committed   2239.341019 USDC  (virtual balance)
+  wallet      2914.339676 USDC
+  allowance   115792089237316195423570985008687907853269984665640564039457584007911219.343741 (->Aqua) / 0 (->app)
+  backed      2914.339676 USDC  = min(wallet, allowance)
+  COVERAGE    130.14% 
+  phantom     0 USDC
+─────────────────────────────────────────────────────────
+maker 0xE00D6D9AF658A877335fED28FacD0e28EE8518D2
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x549a0caf426a658b3c81726d2e4f9c0f00e1a3c8c73caf02d99aed9c23fe446b
+  token       0x6B175474E89094C44Da98b954EedeAC495271d0F  DAI (18dp)  tokensCount=2
+  committed   5512.972301538433694785 DAI  (virtual balance)
+  wallet      9334.332820939198056426 DAI
+  allowance   115792089237316195423570985008687907853269984665640564039457.584007913129639935 (->Aqua) / 0 (->app)
+  backed      9334.332820939198056426 DAI  = min(wallet, allowance)
+  COVERAGE    169.32% 
+  phantom     0 DAI
+─────────────────────────────────────────────────────────
+maker 0xE00D6D9AF658A877335fED28FacD0e28EE8518D2
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x8d1262acdf164c54d835df560c3594c72d02cb5e4817c3f5ba1a35847655139c
+  token       0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48  USDC (6dp)  tokensCount=2
+  committed   3336.965946 USDC  (virtual balance)
+  wallet      7596.025505 USDC
+  allowance   115792089237316195423570985008687907853269984665640564039457584007900895.419175 (->Aqua) / 0 (->app)
+  backed      7596.025505 USDC  = min(wallet, allowance)
+  COVERAGE    227.63% 
+  phantom     0 USDC
+─────────────────────────────────────────────────────────
+maker 0x9919820B06b75C14E2A205089485621Dc9b0fefc
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xd4ea07507ec2b2e6f8d1e26efc39a0007f3b74cf5204c128ef9125485b0c2902
+  token       0x68749665FF8D2d112Fa859AA293F07A622782F38  XAUt (6dp)  tokensCount=2
+  committed   0.197996 XAUt  (virtual balance)
+  wallet      0.517097 XAUt
+  allowance   115792089237316195423570985008687907853269984665640564039457584007913114.615877 (->Aqua) / 0 (->app)
+  backed      0.517097 XAUt  = min(wallet, allowance)
+  COVERAGE    261.17% 
+  phantom     0 XAUt
+─────────────────────────────────────────────────────────
+maker 0xf9C6251bb769Bd04C9D7Eb1599F4e1C5CB3208d3
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x15ac2421c4f3d621e30d9194fab4001324b11478f4f6b2e5b57d175e7b280663
+  token       0x111111111117dC0aa78b770fA6A738034120C302  1INCH (18dp)  tokensCount=2
+  committed   34240.588216341711441289 1INCH  (virtual balance)
+  wallet      97714.400233750320842292 1INCH
+  allowance   115792089237316195423570985008687907853269984665640562778920.319049454287033299 (->Aqua) / 0 (->app)
+  backed      97714.400233750320842292 1INCH  = min(wallet, allowance)
+  COVERAGE    285.38% 
+  phantom     0 1INCH
+─────────────────────────────────────────────────────────
+maker 0xf9C6251bb769Bd04C9D7Eb1599F4e1C5CB3208d3
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0x9ed78c267499a0effaa144065eb1b18b49f8ad6120025f516ef5b44ae844c88c
+  token       0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0  wstETH (18dp)  tokensCount=2
+  committed   1.253684366818237886 wstETH  (virtual balance)
+  wallet      4.725392189281531115 wstETH
+  allowance   115792089237316195423570985008687907853269984665640564039379.248691457209617764 (->Aqua) / 0 (->app)
+  backed      4.725392189281531115 wstETH  = min(wallet, allowance)
+  COVERAGE    376.92% 
+  phantom     0 wstETH
+─────────────────────────────────────────────────────────
+maker 0xf9C6251bb769Bd04C9D7Eb1599F4e1C5CB3208d3
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xf6c2d36aa89ad620e2b395bc25c73ea7359ce63aba33fdc647d4a8ad56822827
+  token       0x111111111117dC0aa78b770fA6A738034120C302  1INCH (18dp)  tokensCount=2
+  committed   11465.747316587580504759 1INCH  (virtual balance)
+  wallet      97714.400233750320842292 1INCH
+  allowance   115792089237316195423570985008687907853269984665640562778920.319049454287033299 (->Aqua) / 0 (->app)
+  backed      97714.400233750320842292 1INCH  = min(wallet, allowance)
+  COVERAGE    852.23% 
+  phantom     0 1INCH
+─────────────────────────────────────────────────────────
+maker 0xc6e29bCE1AfC844dc15C0631ccddA19220bA4337
+  app/router  0x111111338c5091E8440b67B168bAe16a668AC0De
+  strategy    0xa8978592c0b41482a3c7acd41e2fd52cd2b1244b8c479b2d0cd7e15ae271aede
+  token       0x4c9EDD5852cd905f086C759E8383e09bff1E68B3  USDe (18dp)  tokensCount=2
+  committed   0 USDe  (virtual balance)
+  wallet      0 USDe
+  allowance   0 (->Aqua) / 0 (->app)
+  backed      0 USDe  = min(wallet, allowance)
+  COVERAGE    n/a 
+  phantom     0 USDe
+
+=========================================================
+positions seen: 29 | live: 21 | coverage computed: 21
+under-backed (coverage < 100%): 5
