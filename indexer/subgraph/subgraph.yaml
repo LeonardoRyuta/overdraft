@@ -1,0 +1,39 @@
+specVersion: 1.0.0
+description: >-
+  Overdraft — Aqua position lifecycle & quoted (virtual) balances. One schema,
+  reused per chain. Indexes the Aqua registry's Shipped/Pushed/Pulled/Docked
+  events (all non-indexed) to enumerate every position and track committed depth.
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: Aqua
+    network: mainnet
+    source:
+      address: "0x1111113ccf1426a8e30e2bff5e005d929bf6a90a"
+      abi: Aqua
+      startBlock: 25567141
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Maker
+        - Token
+        - Position
+        - Commitment
+      abis:
+        - name: Aqua
+          file: ./abis/Aqua.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Shipped(address,address,bytes32,bytes)
+          handler: handleShipped
+        - event: Pushed(address,address,bytes32,address,uint256)
+          handler: handlePushed
+        - event: Pulled(address,address,bytes32,address,uint256)
+          handler: handlePulled
+        - event: Docked(address,address,bytes32)
+          handler: handleDocked
+      file: ./src/aqua.ts

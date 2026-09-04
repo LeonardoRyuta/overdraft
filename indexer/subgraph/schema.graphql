@@ -1,0 +1,46 @@
+"""
+Overdraft subgraph — Aqua position lifecycle + quoted (virtual) balances.
+
+Design note: this subgraph is the QUOTED side of coverage — it enumerates every
+position and reconstructs each commitment's virtual balance from Pushed/Pulled
+events. The BACKED side (maker wallet balance ∩ allowance to Aqua) is live ERC-20
+state that must be read "as of now", so the coverage engine overlays it at query
+time via eth_call. rawBalances (live) is treated as source-of-truth for committed;
+the `committed` field here is the event-reconstructed value and a cross-check.
+"""
+
+type Maker @entity(immutable: false) {
+  id: Bytes! # maker address
+  firstSeenBlock: BigInt!
+  positions: [Position!]! @derivedFrom(field: "maker")
+  commitments: [Commitment!]! @derivedFrom(field: "maker")
+}
+
+type Token @entity(immutable: false) {
+  id: Bytes! # token address
+  symbol: String!
+  decimals: Int!
+}
+
+type Position @entity(immutable: false) {
+  id: Bytes! # maker ++ app ++ strategyHash
+  maker: Maker!
+  app: Bytes! # the Aqua "app" — for SwapVM positions this is the SwapVM router
+  strategyHash: Bytes!
+  active: Boolean! # false once Docked
+  tokens: [Bytes!]! # token addresses seen for this position (for Docked fan-out)
+  shippedBlock: BigInt!
+  shippedTx: Bytes!
+  dockedBlock: BigInt
+  commitments: [Commitment!]! @derivedFrom(field: "position")
+}
+
+type Commitment @entity(immutable: false) {
+  id: Bytes! # position.id ++ token
+  position: Position!
+  maker: Maker!
+  token: Token!
+  committed: BigInt! # running virtual balance = Σ Pushed − Σ Pulled (event-reconstructed)
+  active: Boolean!
+  lastUpdatedBlock: BigInt!
+}

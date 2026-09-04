@@ -1,0 +1,16 @@
+{
+  "name": "overdraft-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Overdraft — Aqua position lifecycle & quoted-depth subgraph (one schema, per chain)",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy overdraft-aqua",
+    "auth": "graph auth"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "latest",
+    "@graphprotocol/graph-ts": "latest"
+  }
+}
