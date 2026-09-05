@@ -1,0 +1,82 @@
+# Overdraft — Ethereum coverage findings
+# captured 2026-09-05 (Day 2). Enumeration: Blockscout keyless logs (deep, ~40 pages).
+# Reads: eth_call (rawBalances + ERC20) via publicnode/drpc. Prices: DefiLlama (keyless).
+# CAVEATS: Ethereum only; large RECENT sample, not yet full historical population (subgraph will complete it).
+# 'degenerate' = virtual balance exceeds token total supply (can never be backed) — excluded from headline.
+
+
+# Overdraft coverage — ethereum (source: blockscout)
+enumerated 123 commitments, 78 live, 42 (maker,token) groups
+real: 35   degenerate (committed > token supply): 7
+
+  10.10% ⚠ USDC     maker 0x831a7f54… committed 109.561888 backed 11.06251 (wallet) ⚠ UNDER-BACKED
+  34.94% ⚠ COTI     maker 0x831a7f54… committed 6545.969389463336737577 backed 2286.931997106469468353 (wallet) ⚠ UNDER-BACKED
+  35.62% ⚠ USDC     maker 0x3fB99Afb… committed 808.075268 backed 287.851618 (wallet) ⚠ UNDER-BACKED
+  36.49% ⚠ UNI      maker 0xf9C6251b… committed 168.265363325804467784 backed 61.406215880850336006 (wallet) ⚠ UNDER-BACKED
+  47.39% ⚠ 1INCH    maker 0x3fB99Afb… committed 23087.156919898791201985 backed 10941.025679910681213577 (wallet) ⚠ UNDER-BACKED
+  49.99% ⚠ 1INCH    maker 0x9919820B… committed 41348.18522353585157501 backed 20671.043257886854449059 (wallet) ⚠ UNDER-BACKED
+  57.83% ⚠ tBTC     maker 0x9919820B… committed 0.0032735414 backed 0.001893160682685703 (wallet) ⚠ UNDER-BACKED
+  61.09% ⚠ 1INCH    maker 0x4f0f7E45… committed 423391.597615018119301674 backed 258655.646371899359608714 (wallet) ⚠ UNDER-BACKED
+  61.71% ⚠ WETH     maker 0xf9C6251b… committed 0.639574948502802765 backed 0.394689454427795514 (wallet) ⚠ UNDER-BACKED
+  69.16% ⚠ WETH     maker 0x3127f2A4… committed 1.063591319584186706 backed 0.735552313447998611 (allowance) ⚠ UNDER-BACKED
+  72.55% ⚠ 1INCH    maker 0xf9C6251b… committed 130975.472024296023536579 backed 95028.39902236346348885 (wallet) ⚠ UNDER-BACKED
+  86.81% ⚠ USDC     maker 0xC0A347d4… committed 1053.562198 backed 914.581119 (wallet) ⚠ UNDER-BACKED
+  87.56% ⚠ UNI      maker 0x235B8509… committed 472.530030283861039172 backed 413.731288198029463467 (wallet) ⚠ UNDER-BACKED
+  95.42% ⚠ USDe     maker 0xE00D6D9A… committed 11153.462228942071810287 backed 10642.889612306991690121 (wallet) ⚠ UNDER-BACKED
+ 100.00%   WETH     maker 0x4f0f7E45… committed 5.751632287848280081 backed 5.751632391434134781 (wallet)
+ 100.00%   wstETH   maker 0x33333333… committed 0.499645971628166143 backed 0.499646022239134426 (wallet)
+ 100.00%   WBTC     maker 0x4f0f7E45… committed 0.09300613 backed 0.09300624 (wallet)
+ 100.50%   LINK     maker 0x9919820B… committed 84.879748329798575994 backed 85.304265906235168712 (wallet)
+ 100.86%   ONDO     maker 0x9919820B… committed 4163.371127931002333662 backed 4198.991858047231201403 (wallet)
+ 100.91%   UNI      maker 0x9919820B… committed 687.229877370993011677 backed 693.489617848506113895 (wallet)
+ 102.58%   1INCH    maker 0x33333333… committed 18064.454408058653556913 backed 18530.119065009190770339 (wallet)
+ 107.72%   USDC     maker 0x3D699108… committed 18.333934 backed 19.749554 (wallet)
+ 112.95%   DAI      maker 0xE00D6D9A… committed 8358.876161540890789865 backed 9440.986509407378674144 (wallet)
+ 119.17%   AAVE     maker 0xf9C6251b… committed 14.050689800281573428 backed 16.744035329462463114 (wallet)
+ 124.32%   LDO      maker 0x6F1821A5… committed 1913.716589153225020915 backed 2379.099895054765411513 (wallet)
+ 132.30%   1INCH    maker 0x235B8509… committed 32664.20628369855497328 backed 43213.876788281719357345 (wallet)
+ 138.74%   USDC     maker 0xE00D6D9A… committed 5482.568755 backed 7606.275207 (wallet)
+ 208.50%   UNI      maker 0xF23c5485… committed 12.4 backed 25.854154705371901788 (wallet)
+ 230.49%   XAUt     maker 0x9919820B… committed 0.183302 backed 0.422499 (wallet)
+ 385.76%   wstETH   maker 0xf9C6251b… committed 1.196958172714478366 backed 4.617362101878834987 (wallet)
+ 567.61%   sUSDS    maker 0x09Fa38EB… committed 1001.975705025678052786 backed 5687.311978738240233659 (wallet)
+ 939.45%   TEL      maker 0x831a7f54… committed 9127.9 backed 85752.11 (wallet)
+1350.32%   wstETH   maker 0x1517C262… committed 0.002874102570389968 backed 0.038809546981159775 (wallet)
+1746.60%   1INCH    maker 0x831a7f54… committed 56.684612978578419866 backed 990.051660046437202132 (wallet)
+     n/a   1INCH    maker 0xF23c5485… committed 0 backed 0 (wallet)
+
+degenerate positions (virtual balance exceeds token total supply — excluded from headline):
+  wstETH   maker 0xE01ecFF2…  committed 6999999999998.999999497464053425  (supply 3702925.723843608614458606)
+  wstETH   maker 0x21cb4921…  committed 490501984666.739983217569070724  (supply 3702925.723843608614458606)
+  1INCH    maker 0xE01ecFF2…  committed 301248463050744387.508511527472752969  (supply 1499999999.997)
+  WBTC     maker 0xE01ecFF2…  committed 36666666666.01143491  (supply 116132.18273272)
+  AAVE     maker 0xE01ecFF2…  committed 3366666666669.19935108673492061  (supply 16000000)
+  1INCH    maker 0x21cb4921…  committed 18014398509481574.148941535421886609  (supply 1499999999.997)
+  USDT     maker 0xE01ecFF2…  committed 3333334829249.050209  (supply 88306226684.053103)
+
+per-token totals (real positions only):
+  USDC     quoted 7472.102043  backed 8839.520008  phantom 757.704107  (3/10 under-backed)
+  COTI     quoted 6545.969389463336737577  backed 2286.931997106469468353  phantom 4259.037392356867269224  (1/5 under-backed)
+  UNI      quoted 1340.425270980658518633  backed 1194.481276632757815156  phantom 165.657889530785707483  (2/5 under-backed)
+  1INCH    quoted 669587.757087484572565307  backed 448030.161845397706090016  phantom 233506.297450688426855048  (4/20 under-backed)
+  tBTC     quoted 0.0032735414  backed 0.001893160682685703  phantom 0.001380380717314297  (1/1 under-backed)
+  WETH     quoted 7.454798555935269552  backed 6.881874159309928906  phantom 0.572924500211195346  (2/3 under-backed)
+  USDe     quoted 11153.462228942071810287  backed 10642.889612306991690121  phantom 510.572616635080120166  (1/1 under-backed)
+  wstETH   quoted 1.699478246913034477  backed 5.155817671099129188  phantom 0  (0/3 under-backed)
+  WBTC     quoted 0.09300613  backed 0.09300624  phantom 0  (0/1 under-backed)
+  LINK     quoted 84.879748329798575994  backed 85.304265906235168712  phantom 0  (0/1 under-backed)
+  ONDO     quoted 4163.371127931002333662  backed 4198.991858047231201403  phantom 0  (0/1 under-backed)
+  DAI      quoted 8358.876161540890789865  backed 9440.986509407378674144  phantom 0  (0/1 under-backed)
+  AAVE     quoted 14.050689800281573428  backed 16.744035329462463114  phantom 0  (0/1 under-backed)
+  LDO      quoted 1913.716589153225020915  backed 2379.099895054765411513  phantom 0  (0/2 under-backed)
+  XAUt     quoted 0.183302  backed 0.422499  phantom 0  (0/1 under-backed)
+  sUSDS    quoted 1001.975705025678052786  backed 5687.311978738240233659  phantom 0  (0/1 under-backed)
+  TEL      quoted 9127.9  backed 85752.11  phantom 0  (0/1 under-backed)
+
+real under-backed (maker,token) groups: 14 / 35
+
+=== USD HEADLINE — ethereum (real positions, 35 priced / 0 unpriced) ===
+  quoted depth : $134,510
+  backed depth : $131,288
+  coverage     : 97.6%
+  phantom depth: $25,109  (quoted − backed)

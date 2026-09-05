@@ -6,6 +6,7 @@ import { formatUnits } from "viem";
 import { enumerateBlockscout, enumerateSubgraph } from "./enumerate.js";
 import { rawBalance, readBacking, tokenMeta } from "./reader.js";
 import { coverageByMakerToken, aggregateByToken } from "./coverage.js";
+import { getPricesUSD, toUsd } from "./pricing.js";
 
 export async function scanChain(chain, { subgraphUrl = process.env.SUBGRAPH_URL, maxPages = 6 } = {}) {
   const source = subgraphUrl ? "subgraph" : "blockscout";
@@ -32,8 +33,23 @@ export async function scanChain(chain, { subgraphUrl = process.env.SUBGRAPH_URL,
   }
   const real = rows.filter((r) => !r.overSupply);
   const degenerate = rows.filter((r) => r.overSupply);
+
+  // USD pricing over real positions (keyless DefiLlama); unpriced tokens excluded from the $ headline
+  const prices = await getPricesUSD(chain, real.map((r) => r.token));
+  let usdQuoted = 0, usdBacked = 0, usdPhantom = 0, priced = 0, unpriced = 0;
+  for (const r of real) {
+    const p = prices.get(r.token.toLowerCase());
+    r.priceUsd = p ? p.price : null;
+    r.usdQuoted = toUsd(r.committed, r.decimals, r.priceUsd);
+    r.usdBacked = toUsd(r.backed, r.decimals, r.priceUsd);
+    r.usdPhantom = toUsd(r.phantom, r.decimals, r.priceUsd);
+    if (r.priceUsd == null) { unpriced++; continue; }
+    priced++; usdQuoted += r.usdQuoted; usdBacked += r.usdBacked; usdPhantom += r.usdPhantom;
+  }
+  const headline = { usdQuoted, usdBacked, usdPhantom, coverageUsd: usdQuoted > 0 ? usdBacked / usdQuoted : null, priced, unpriced };
+
   // headline aggregates are over REAL positions only; degenerate/spam reported separately
-  return { chain, source, positions: tuples.length, live: commitments.length, rows, real, degenerate, byToken: aggregateByToken(real) };
+  return { chain, source, positions: tuples.length, live: commitments.length, rows, real, degenerate, byToken: aggregateByToken(real), headline };
 }
 
 function printReport(res) {
@@ -60,6 +76,16 @@ function printReport(res) {
   }
   const under = res.real.filter((r) => r.ratio !== null && r.ratio < 0.999).length;
   console.log(`\nreal under-backed (maker,token) groups: ${under} / ${res.real.length}`);
+
+  const h = res.headline;
+  if (h) {
+    const usd = (x) => "$" + Math.round(x).toLocaleString("en-US");
+    console.log(`\n=== USD HEADLINE — ${res.chain} (real positions, ${h.priced} priced / ${h.unpriced} unpriced) ===`);
+    console.log(`  quoted depth : ${usd(h.usdQuoted)}`);
+    console.log(`  backed depth : ${usd(h.usdBacked)}`);
+    console.log(`  coverage     : ${h.coverageUsd == null ? "n/a" : (h.coverageUsd * 100).toFixed(1) + "%"}`);
+    console.log(`  phantom depth: ${usd(h.usdPhantom)}  (quoted − backed)`);
+  }
 }
 
 // CLI
@@ -68,7 +94,7 @@ if (isMain) {
   const args = process.argv.slice(2);
   const chain = args[args.indexOf("--chain") + 1] || "ethereum";
   const pagesIdx = args.indexOf("--pages");
-  const maxPages = pagesIdx > -1 ? Number(args[pagesIdx + 1]) : 6;
+  const maxPages = args.includes("--deep") ? 40 : pagesIdx > -1 ? Number(args[pagesIdx + 1]) : 6;
   const res = await scanChain(chain, { maxPages });
   if (args.includes("--json")) {
     console.log(JSON.stringify(res, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2));
