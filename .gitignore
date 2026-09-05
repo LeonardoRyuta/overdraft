@@ -46,3 +46,6 @@ indexer/subgraph/build/
 # Internal strategy notes — kept local, not in public history
 docs/PRIZE-TRACKS.md
 docs/DAY1-ASSESSMENT.md
+
+# NTFS junction to spikes/sdk/node_modules
+spikes/order/node_modules
