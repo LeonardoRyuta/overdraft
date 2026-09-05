@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+// Overdraft — Aqua position lifecycle, Substreams edition.
+//
+// This is the Firehose-native twin of indexer/subgraph (schema.graphql).
+// Same data model, but emitted as protobuf so it can run on chains The Graph's
+// hosted subgraphs can't reach (Robinhood chain / Monad / HyperEVM are
+// Firehose-only — one module, re-pointed per chain via substreams.yaml network).
+//
+// The mapping decodes the four non-indexed Aqua registry events
+// (Shipped/Pushed/Pulled/Docked) and reconstructs, per block:
+//   * Position lifecycle (active until Docked), keyed maker++app++strategyHash
+//   * Per-(maker,strategyHash,token) committed depth = Σ Pushed − Σ Pulled
+//
+// `committed` here is the EVENT-RECONSTRUCTED virtual balance (the "quoted"
+// side of Overdraft coverage). The live "backed" side (maker wallet balance ∩
+// allowance to Aqua) is read at query time via eth_call and is NOT in this
+// module — mirrors the design note at the top of schema.graphql.
+package overdraft.aqua.v1;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// map_events output: the raw, decoded Aqua events for one block, in log order.
+// This is the low-level module; store modules fold these into running state.
+// ─────────────────────────────────────────────────────────────────────────────
+message Events {
+  repeated ShippedEvent shipped = 1;
+  repeated PushedEvent  pushed  = 2;
+  repeated PulledEvent  pulled  = 3;
+  repeated DockedEvent  docked  = 4;
+}
+
+// Common on-chain provenance stamped on every decoded event.
+message EventMeta {
+  uint64 block_number      = 1;
+  string block_hash        = 2; // 0x-hex
+  uint64 block_timestamp   = 3; // unix seconds
+  string tx_hash           = 4; // 0x-hex
+  uint32 log_index         = 5; // block-level ordinal (for deterministic ordering)
+  uint32 log_ordinal       = 6; // substreams ordinal within block
+}
+
+message ShippedEvent {
+  EventMeta meta       = 1;
+  string maker         = 2; // 0x-hex address
+  string app           = 3; // Aqua "app"; for SwapVM positions = SwapVM router
+  string strategy_hash = 4; // 0x-hex bytes32 (keccak256(strategy) or keccak256(abi.encode(order)))
+  string strategy      = 5; // 0x-hex of the raw strategy blob (data-availability by design)
+}
+
+message PushedEvent {
+  EventMeta meta       = 1;
+  string maker         = 2;
+  string app           = 3;
+  string strategy_hash = 4;
+  string token         = 5; // 0x-hex address
+  string amount        = 6; // uint256 as decimal string
+}
+
+message PulledEvent {
+  EventMeta meta       = 1;
+  string maker         = 2;
+  string app           = 3;
+  string strategy_hash = 4;
+  string token         = 5;
+  string amount        = 6; // uint256 as decimal string
+}
+
+message DockedEvent {
+  EventMeta meta       = 1;
+  string maker         = 2;
+  string app           = 3;
+  string strategy_hash = 4;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// map_entity_changes output: subgraph-shaped entity snapshots for this block.
+// Mirrors schema.graphql. A downstream sink (subgraph-sink / SQL / custom)
+// upserts these. Only entities that changed in the block are emitted.
+// ─────────────────────────────────────────────────────────────────────────────
+message EntityChanges {
+  repeated Maker      makers      = 1;
+  repeated Token      tokens      = 2;
+  repeated Position   positions   = 3;
+  repeated Commitment commitments = 4;
+}
+
+// Mirror of schema.graphql `Maker`.
+message Maker {
+  string id               = 1; // maker address, 0x-hex
+  uint64 first_seen_block = 2;
+}
+
+// Mirror of schema.graphql `Token`.
+// symbol/decimals are left unresolved here (no eth_call in this map module —
+// see README) and default to "?"/18; a sink or eth_call-enabled module can
+// enrich them. The address `id` is always correct.
+message Token {
+  string id       = 1; // token address, 0x-hex
+  string symbol   = 2;
+  int32  decimals = 3;
+}
+
+// Mirror of schema.graphql `Position`.
+message Position {
+  string id            = 1; // maker ++ app ++ strategyHash, 0x-hex
+  string maker         = 2;
+  string app           = 3;
+  string strategy_hash = 4;
+  bool   active        = 5; // false once Docked
+  repeated string tokens = 6; // token addresses seen (for Docked fan-out)
+  uint64 shipped_block = 7;
+  string shipped_tx    = 8; // 0x-hex
+  // dockedBlock is optional in the schema; 0 + docked_block_set=false == null.
+  uint64 docked_block     = 9;
+  bool   docked_block_set = 10;
+}
+
+// Mirror of schema.graphql `Commitment`.
+// committed = running virtual balance = Σ Pushed − Σ Pulled (event-reconstructed).
+message Commitment {
+  string id                 = 1; // position.id ++ token, 0x-hex
+  string position           = 2; // position id
+  string maker              = 3;
+  string token              = 4; // token id (address)
+  string committed          = 5; // uint256 as decimal string (clamped at 0)
+  bool   active             = 6;
+  uint64 last_updated_block = 7;
+}

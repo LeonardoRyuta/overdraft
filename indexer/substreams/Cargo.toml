@@ -1,0 +1,34 @@
+[package]
+name = "overdraft-aqua-substreams"
+version = "0.1.0"
+description = "Overdraft — Aqua position lifecycle indexer (Substreams / Firehose-native twin of the subgraph)"
+edition = "2021"
+repository = "https://github.com/overdraft/overdraft"
+
+[lib]
+name = "overdraft_aqua_substreams"
+crate-type = ["cdylib"]
+
+[dependencies]
+substreams = "0.6"
+substreams-ethereum = "0.10"
+# prost must match the version substreams 0.6 uses (0.13.x) — a mismatch means
+# our pb structs derive a different `Message` trait than the store/decode APIs expect.
+prost = "0.13"
+# The Abigen-generated src/abi/aqua.rs references `ethabi::` at the crate root;
+# pin to the same version substreams-ethereum-core uses (17.x).
+ethabi = "17"
+hex-literal = "0.4"
+num-bigint = "0.4"
+num-traits = "0.2"
+
+[build-dependencies]
+anyhow = "1"
+substreams-ethereum = "0.10"
+
+# WASM release profile — Substreams modules must be small & deterministic.
+[profile.release]
+lto = true
+opt-level = "s"
+strip = "debuginfo"
+panic = "abort"

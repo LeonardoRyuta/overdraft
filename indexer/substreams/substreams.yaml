@@ -1,0 +1,66 @@
+specVersion: v0.1.0
+package:
+  name: overdraft_aqua
+  version: v0.1.0
+  url: https://github.com/overdraft/overdraft
+  description: >-
+    Overdraft — Aqua position lifecycle & quoted (virtual) balances, Substreams
+    edition. Firehose-native twin of indexer/subgraph. Indexes the Aqua registry's
+    Shipped/Pushed/Pulled/Docked events (all non-indexed) to enumerate every
+    position and track committed depth = Σ Pushed − Σ Pulled. One module,
+    re-pointed per chain to reach Firehose-only chains the hosted subgraph can't.
+
+imports:
+  # ethereum block model + entity-change helpers come from the toolchain; no
+  # external .spkg import is required for the map/store modules below.
+
+protobuf:
+  files:
+    - overdraft.proto
+  importPaths:
+    - ./proto
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ./target/wasm32-unknown-unknown/release/overdraft_aqua_substreams.wasm
+
+# Mainnet by default. For a different chain, change `network` (must match a
+# Firehose endpoint you point the CLI at) and `initialBlock` on map_events.
+network: mainnet
+
+modules:
+  # 1) Decode the four Aqua events for each block, in log order.
+  - name: map_events
+    kind: map
+    initialBlock: 25567141
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:overdraft.aqua.v1.Events
+
+  # 2) Running committed depth per (maker,strategyHash,token): +Pushed / −Pulled.
+  - name: store_commitments
+    kind: store
+    updatePolicy: add
+    valueType: bigint
+    inputs:
+      - map: map_events
+
+  # 3) Position lifecycle (active until Docked) + accumulated token set.
+  - name: store_positions
+    kind: store
+    updatePolicy: set
+    valueType: proto:overdraft.aqua.v1.Position
+    inputs:
+      - map: map_events
+
+  # 4) Subgraph-shaped entity upserts for entities touched this block.
+  - name: map_entity_changes
+    kind: map
+    inputs:
+      - map: map_events
+      - store: store_positions
+      - store: store_commitments
+    output:
+      type: proto:overdraft.aqua.v1.EntityChanges
