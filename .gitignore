@@ -52,3 +52,6 @@ spikes/order/node_modules
 
 # swap-vm is license-restricted (LicenseRef-Degensoft-SwapVM-1.1) — fetch via forge/npm, do not vendor
 contracts/lib/swap-vm/
+
+# junction to spikes/sdk/node_modules
+packages/probe/node_modules
