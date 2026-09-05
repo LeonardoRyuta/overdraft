@@ -1,0 +1,14 @@
+{
+  "name": "@overdraft/coverage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Overdraft coverage engine — quoted (virtual) vs backed (wallet ∩ allowance) depth for 1inch Aqua positions",
+  "scripts": {
+    "test": "node src/coverage.js --test",
+    "scan": "node src/run.js --chain ethereum"
+  },
+  "dependencies": {
+    "viem": "^2.56.3"
+  }
+}
