@@ -42,3 +42,7 @@ spikes/protocol/
 # subgraph codegen/build artifacts
 indexer/subgraph/generated/
 indexer/subgraph/build/
+
+# Internal strategy notes — kept local, not in public history
+docs/PRIZE-TRACKS.md
+docs/DAY1-ASSESSMENT.md
