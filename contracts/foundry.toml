@@ -2,14 +2,21 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+# Match upstream swap-vm's compiler settings — it needs via_ir (stack-too-deep) + these
+# optimizer details. Our SolvencyGuard imports and extends swap-vm, so we compile it too.
+solc_version = "0.8.30"
 optimizer = true
-optimizer_runs = 200
-# Aqua/SwapVM are compiled with 0.8.30; our own code targets ^0.8.13 and is compatible.
+optimizer_runs = 700
+via_ir = true
+
+[profile.default.optimizer_details]
+yul = true
+yulDetails = { stackAllocation = true }
+
+# Remappings are pinned in remappings.txt (takes precedence over forge auto-detection,
+# which mis-resolved swap-vm/ and the nested npm deps).
 
 [rpc_endpoints]
 mainnet = "https://ethereum-rpc.publicnode.com"
 base = "https://base-rpc.publicnode.com"
 arbitrum = "https://arbitrum-one-rpc.publicnode.com"
-
-# Note: public RPCs serve fork state at/near `latest` but gate deep-archive reads.
-# A pinned-block reproducible fork needs an archive RPC key (see docs/PRIZE-TRACKS.md ask).
