@@ -27,14 +27,22 @@ export async function enumerateBlockscout(chain, { maxPages = 6 } = {}) {
   return [...tuples.values()];
 }
 
-export async function enumerateSubgraph(url, { first = 1000 } = {}) {
-  const query = `{ commitments(where:{active:true}, first:${first}, orderBy:committed, orderDirection:desc) {
-    committed maker { id } token { id } position { app strategyHash active } } }`;
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) });
-  const json = await res.json();
-  if (json.errors) throw new Error(`subgraph: ${JSON.stringify(json.errors)}`);
-  return json.data.commitments.map((c) => ({
-    maker: c.maker.id, app: c.position.app, strategyHash: c.position.strategyHash,
-    token: c.token.id, committed: BigInt(c.committed),
-  }));
+// Paginate the FULL set of active commitments via an id cursor (The Graph caps `first` at 1000).
+export async function enumerateSubgraph(url, { pageSize = 1000 } = {}) {
+  const out = [];
+  let lastId = "";
+  for (;;) {
+    const query = `{ commitments(where:{active:true, id_gt:"${lastId}"}, first:${pageSize}, orderBy:id, orderDirection:asc) {
+      id committed maker { id } token { id } position { app strategyHash } } }`;
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) });
+    const json = await res.json();
+    if (json.errors) throw new Error(`subgraph: ${JSON.stringify(json.errors)}`);
+    const batch = json.data.commitments;
+    for (const c of batch) {
+      out.push({ maker: c.maker.id, app: c.position.app, strategyHash: c.position.strategyHash, token: c.token.id, committed: BigInt(c.committed) });
+    }
+    if (batch.length < pageSize) break;
+    lastId = batch[batch.length - 1].id;
+  }
+  return out;
 }
