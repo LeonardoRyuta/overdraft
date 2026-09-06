@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Overdraft — Aqua coverage</title>
+<style>
+  :root {
+    --bg: #0b0e11; --panel: #12161b; --line: #232a33; --fg: #e6edf3; --muted: #8b98a5;
+    --red: #ff5c5c; --amber: #ffb454; --green: #3fb950; --accent: #35d0ba;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+  header h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  header .tag { color: var(--muted); margin: 0 0 4px; }
+  header .meta { color: var(--muted); font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .card .v { font-size: 26px; font-weight: 600; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .card.phantom .v { color: var(--red); }
+  .card.cov .v { color: var(--accent); }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 32px 0 10px; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; }
+  th, td { text-align: right; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; position: sticky; top: 0; background: var(--panel); }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  tr:last-child td { border-bottom: 0; }
+  .maker a { color: var(--fg); text-decoration: none; }
+  .maker a:hover { color: var(--accent); }
+  .bar { display: inline-block; width: 70px; height: 8px; background: #2a323c; border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
+  .bar > span { display: block; height: 100%; }
+  .cov-red { color: var(--red); } .cov-amber { color: var(--amber); } .cov-green { color: var(--green); }
+  .pill { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 40px; border-top: 1px solid var(--line); padding-top: 18px; }
+  code { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 12.5px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Overdraft</h1>
+    <p class="tag">How much of 1inch Aqua's advertised liquidity actually exists.</p>
+    <p class="meta" id="meta">loading…</p>
+  </header>
+
+  <div class="cards" id="cards"></div>
+
+  <h2>Coverage leaderboard — worst first</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th class="l">Maker</th><th class="l">Token</th><th>Coverage</th>
+        <th>Quoted</th><th>Backed</th><th>Phantom</th><th class="l">Binding</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <h2 id="degh" style="display:none">Degenerate positions — virtual balance exceeds token supply</h2>
+  <div class="scroll" id="degwrap" style="display:none">
+    <table><thead><tr><th class="l">Maker</th><th class="l">Token</th><th class="l">Note</th></tr></thead>
+    <tbody id="deg"></tbody></table>
+  </div>
+
+  <footer>
+    <p><b>coverage</b> = min(wallet balance, allowance→Aqua) / Σ virtual balance committed, per (maker, token).
+       <b>phantom</b> = quoted − backed. Every figure read live from mainnet state; degenerate positions
+       (committed &gt; token supply) are excluded from the headline.</p>
+    <p>Reproduce: <code>cd packages/coverage &amp;&amp; node src/run.js --chain ethereum --deep</code> ·
+       <a href="https://github.com/LeonardoRyuta/overdraft">source</a></p>
+  </footer>
+</div>
+
+<script>
+const usd = (x) => "$" + Math.round(x || 0).toLocaleString("en-US");
+const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+const covClass = (r) => r == null ? "" : r < 0.7 ? "cov-red" : r < 1 ? "cov-amber" : "cov-green";
+const covColor = (r) => r == null ? "#8b98a5" : r < 0.7 ? "#ff5c5c" : r < 1 ? "#ffb454" : "#3fb950";
+
+fetch("./public/coverage-ethereum.json").then(r => r.json()).then(d => {
+  const h = d.headline;
+  const under = d.real.filter(r => r.ratio !== null && r.ratio < 0.999).length;
+  document.getElementById("meta").textContent =
+    `${d.chain} · source: ${d.source} · ${d.real.length} real positions (${under} under-backed) · ${d.degenerate.length} degenerate · ${h.priced} priced`;
+
+  document.getElementById("cards").innerHTML = [
+    ["Quoted depth", usd(h.usdQuoted), ""],
+    ["Backed depth", usd(h.usdBacked), ""],
+    ["Aggregate coverage", h.coverageUsd == null ? "n/a" : (h.coverageUsd * 100).toFixed(1) + "%", "cov"],
+    ["Phantom depth", usd(h.usdPhantom), "phantom"],
+  ].map(([k, v, c]) => `<div class="card ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+
+  document.getElementById("rows").innerHTML = d.real.map(r => {
+    const pctv = r.ratio == null ? null : Math.min(r.ratio, 1.5);
+    const w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
+    const covTxt = r.ratio == null ? "n/a" : (r.ratio * 100).toFixed(1) + "%";
+    return `<tr>
+      <td class="l maker"><a href="https://etherscan.io/address/${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
+      <td class="l">${r.symbol || "?"}</td>
+      <td><span class="bar"><span style="width:${w}%;background:${covColor(r.ratio)}"></span></span><span class="${covClass(r.ratio)}">${covTxt}</span></td>
+      <td>${usd(r.usdQuoted)}</td><td>${usd(r.usdBacked)}</td>
+      <td class="${r.usdPhantom > 0 ? 'cov-red' : ''}">${usd(r.usdPhantom)}</td>
+      <td class="l"><span class="pill">${r.binding}</span></td>
+    </tr>`;
+  }).join("");
+
+  if (d.degenerate.length) {
+    document.getElementById("degh").style.display = "";
+    document.getElementById("degwrap").style.display = "";
+    document.getElementById("deg").innerHTML = d.degenerate.map(r => `<tr>
+      <td class="l maker"><a href="https://etherscan.io/address/${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
+      <td class="l">${r.symbol || "?"}</td>
+      <td class="l">advertises more than the token's total supply</td></tr>`).join("");
+  }
+}).catch(e => { document.getElementById("meta").textContent = "failed to load snapshot: " + e; });
+</script>
+</body>
+</html>
