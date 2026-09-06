@@ -1,0 +1,18 @@
+{
+  "name": "@overdraft/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Overdraft MCP server — query 1inch Aqua liquidity coverage in natural language, backed by The Graph",
+  "bin": {
+    "overdraft-mcp": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@overdraft/coverage": "file:../../packages/coverage",
+    "zod": "^3.23.0"
+  }
+}
