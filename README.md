@@ -2,6 +2,8 @@
 
 **Measuring how much of 1inch Aqua's advertised liquidity actually exists.**
 
+**▶ Live leaderboard: https://leonardoryuta.github.io/overdraft/**
+
 On Aqua, one wallet balance can back many positions at once (virtual balances), so *quoted*
 depth is an upper bound, not a guarantee. Overdraft computes, for every live position on every
 chain, how much of that quoted depth is actually backed on-chain — and ships the SwapVM
