@@ -58,6 +58,30 @@ whether a maker's wallet can honour what its positions advertise.
 | MCP server + SKILL | 📋 planned |
 | Coverage leaderboard (web) | 📋 planned |
 
+## Architecture
+
+```mermaid
+flowchart TD
+  A["Aqua registry + SwapVM router<br/>(same address, 16 chains)"]
+  A -->|"Shipped / Pushed / Pulled / Docked events"| SG[Subgraph<br/>one schema, per chain]
+  A -->|"Firehose"| SS[Substreams module<br/>reaches chains subgraphs can't]
+  SG --> ENG["Coverage engine<br/>min(wallet, allowance) / Σ virtual<br/>+ USD pricing + degenerate filter"]
+  SS -.-> ENG
+  A -->|"live eth_call: balanceOf / allowance / rawBalances"| ENG
+  ENG --> MCP["MCP server + SKILL<br/>natural-language queries"]
+  ENG --> WEB["Coverage leaderboard<br/>(public site)"]
+  A -->|"mainnet fork"| PROBE["Honesty Probe<br/>quote vs swap · phantom-fill"]
+  PROBE --> GUARD["SolvencyGuard<br/>SwapVM instruction: refuse to overquote"]
+```
+
+- **Index** — Subgraph + Substreams on one schema (The Graph, both tracks).
+- **Diagnose** — the coverage engine joins subgraph-enumerated *quoted* depth with live-read
+  *backed* depth into a per-`(maker, token)` ratio.
+- **Verify** — a Foundry/anvil fork probe proves quote-vs-execution divergence and phantom fills.
+- **Fix** — `SolvencyGuard`, a custom SwapVM instruction, makes a position refuse to quote
+  beyond real backing.
+- **Serve** — an MCP server (+ SKILL) and a public leaderboard over the same data.
+
 ## Verify our claims
 
 ```bash
