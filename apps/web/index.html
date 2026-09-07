@@ -3,143 +3,850 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Overdraft — Aqua coverage</title>
+<title>Overdraft — how much of Aqua's advertised liquidity actually exists</title>
+<meta name="description" content="Overdraft measures the gap between quoted and backed liquidity on 1inch Aqua. On Ethereum, only 6.3% of $25.3M quoted depth is backed — $23.9M is phantom." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0b0e11; --panel: #12161b; --line: #232a33; --fg: #e6edf3; --muted: #8b98a5;
-    --red: #ff5c5c; --amber: #ffb454; --green: #3fb950; --accent: #35d0ba;
+    --abyss:#071a2c; --panel:#0b2236; --line:#16354f; --paper:#e9eef0;
+    --ink:#0a1420; --backed:#3fae9e; --phantom:#d7263d; --muted:#7f93a3;
+    --backed-dim:#1f5c55; --phantom-dim:#5c1a25;
+    --sans:"Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, monospace;
+    --waterline:#bfe9e2;
   }
+
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  a { color: var(--accent); }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
-  header h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.5px; }
-  header .tag { color: var(--muted); margin: 0 0 4px; }
-  header .meta { color: var(--muted); font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .tabs { display: flex; gap: 8px; margin: 20px 0 4px; }
-  .tabs button { background: var(--panel); border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 6px 15px; font-size: 13px; cursor: pointer; font-family: inherit; }
-  .tabs button.active { color: var(--fg); border-color: var(--accent); }
-  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
-  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
-  .card .v { font-size: 26px; font-weight: 600; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .card.phantom .v { color: var(--red); }
-  .card.cov .v { color: var(--accent); }
-  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 32px 0 10px; }
-  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
-  table { border-collapse: collapse; width: 100%; min-width: 720px; }
-  th, td { text-align: right; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
-  th { color: var(--muted); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; position: sticky; top: 0; background: var(--panel); }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--abyss); color: var(--paper);
+    font-family: var(--sans); font-size: 17px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-feature-settings:"tnum" 1; }
+
+  a { color: var(--backed); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--backed); outline-offset: 3px; border-radius: 2px; }
+
+  h1,h2,h3 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.08; margin: 0; }
+
+  .band { padding: clamp(64px, 9vw, 128px) 0; }
+  .band--paper { background: var(--paper); color: var(--ink); }
+  .band--paper a { color: #146a5e; }
+  .inner { width: min(1120px, 90vw); margin: 0 auto; }
+  .measure { max-width: 68ch; }
+
+  /* ---------- skip link ---------- */
+  .skip { position: absolute; left: -9999px; top: 8px; background: var(--backed); color: var(--ink);
+          padding: 8px 14px; border-radius: 6px; font-weight: 600; z-index: 100; }
+  .skip:focus { left: 12px; }
+
+  /* ---------- HERO ---------- */
+  .hero { min-height: 100svh; display: grid; align-items: center; position: relative;
+          padding: 88px 0 56px; }
+  .hero .inner { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(32px, 6vw, 80px);
+                 align-items: center; }
+  .brandmark { display: flex; align-items: baseline; gap: 12px; margin-bottom: 40px; }
+  .brandmark b { font-weight: 700; font-size: 20px; letter-spacing: -0.03em; }
+  .brandmark span { color: var(--muted); font-size: 14px; }
+
+  .hero h1 { font-size: clamp(38px, 6.4vw, 76px); font-weight: 700; }
+  .hero .lede { color: #cdd9e0; margin: 26px 0 34px; font-size: clamp(17px, 2.1vw, 21px); max-width: 30ch; }
+
+  .headfig { display: flex; flex-wrap: wrap; gap: 36px 52px; margin-top: 6px; }
+  .headfig .fig { display: block; }
+  .headfig .n { display: block; font-family: var(--mono); font-weight: 600;
+                font-size: clamp(40px, 7vw, 68px); line-height: 1; letter-spacing: -0.03em; }
+  .headfig .n.teal { color: var(--backed); }
+  .headfig .n.red  { color: var(--phantom); }
+  .headfig .cap { display: block; color: var(--muted); font-size: 14.5px; margin-top: 10px; max-width: 22ch; }
+  .headfig .cap b { color: var(--paper); font-weight: 500; }
+
+  .heroctas { margin-top: 44px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn { font-family: var(--sans); font-weight: 600; font-size: 15.5px; padding: 12px 22px;
+         border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-block; }
+  .btn-solid { background: var(--backed); color: var(--ink); }
+  .btn-solid:hover { background: #55c2b2; text-decoration: none; }
+  .btn-ghost { border-color: var(--line); color: var(--paper); background: transparent; }
+  .btn-ghost:hover { border-color: var(--backed); text-decoration: none; }
+
+  /* ---------- WATERLINE VISUAL ---------- */
+  .column { position: relative; width: 100%; max-width: 360px; margin: 0 auto;
+            border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+            background: linear-gradient(180deg, #0a2438 0%, #071a2c 100%);
+            box-shadow: 0 30px 60px -30px rgba(0,0,0,.6); }
+  .column .col-inner { position: relative; height: clamp(440px, 64vh, 620px); }
+
+  /* quoted region label at very top */
+  .quoted-cap { position: absolute; top: 14px; left: 16px; right: 16px; z-index: 4;
+                display: flex; justify-content: space-between; align-items: baseline; }
+  .quoted-cap .lab { color: #9fb3c2; font-size: 13px; }
+  .quoted-cap .val { color: var(--paper); font-size: 16px; font-weight: 600; }
+
+  /* the water fill (phantom) rises from the bottom */
+  .water { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+           background:
+             linear-gradient(180deg, rgba(215,38,61,.92) 0%, rgba(140,20,36,.96) 100%);
+           overflow: hidden; }
+  .water::before { /* subtle wave shimmer at the surface */
+    content:""; position: absolute; top: 0; left: -50%; width: 200%; height: 14px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+  }
+  .water .phantom-label { position: absolute; left: 16px; bottom: 18px; right: 16px; }
+  .water .phantom-label .lab { color: #ffd6dc; font-size: 13px; letter-spacing: .01em; }
+  .water .phantom-label .val { color: #fff; font-family: var(--mono); font-weight: 600; font-size: 26px; display:block; margin-top: 4px;}
+  .water .phantom-label .sub { color: rgba(255,255,255,.72); font-size: 12.5px; display:block; margin-top: 2px; }
+
+  /* the waterline rule + moving label */
+  .rule { position: absolute; left: 0; right: 0; z-index: 5; height: 0; bottom: 0; }
+  .rule .line { position: absolute; left: 0; right: 0; top: -1px; height: 2px;
+                background: var(--waterline); box-shadow: 0 0 12px rgba(191,233,226,.55); }
+  .rule .tag { position: absolute; right: 12px; top: -30px; font-family: var(--mono);
+               font-size: 12.5px; color: var(--waterline); background: rgba(7,26,44,.72);
+               padding: 2px 8px; border-radius: 5px; }
+
+  /* the thin teal sliver of backed depth, floating just above the water */
+  .backed-band { position: absolute; left: 0; right: 0; z-index: 6;
+                 background: linear-gradient(180deg, #57c6b6, #2f8d80);
+                 border-top: 1px solid rgba(255,255,255,.25); }
+  .backed-band .bl { position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+                     color: #04241f; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+
+  .col-caption { color: var(--muted); font-size: 13px; text-align: center; margin-top: 16px;
+                 max-width: 340px; margin-left: auto; margin-right: auto; }
+
+  /* ---------- THE FINDING (compare) ---------- */
+  .section-h { font-size: clamp(28px, 4vw, 44px); font-weight: 600; margin-bottom: 14px; }
+  .section-lede { color: var(--muted); max-width: 62ch; font-size: 18px; }
+  .band--paper .section-lede { color: #3a4b57; }
+
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 44px; }
+  .chaincard { border: 1px solid rgba(10,20,32,.14); border-radius: 12px; padding: 26px 26px 22px;
+               background: #fff; position: relative; }
+  .chaincard h3 { font-size: 21px; display: flex; align-items: baseline; gap: 10px; }
+  .chaincard h3 .cov { font-family: var(--mono); margin-left: auto; font-size: 30px; font-weight: 600; }
+  .chaincard.eth h3 .cov { color: #b21f31; }
+  .chaincard.base h3 .cov { color: #146a5e; }
+  .chaincard .covbar { height: 10px; border-radius: 6px; background: #dfe6e9; margin: 16px 0 24px; overflow: hidden; }
+  .chaincard .covbar > span { display: block; height: 100%; background: var(--backed); }
+  .chaincard.eth .covbar > span { background: linear-gradient(90deg,#3fae9e,#3fae9e); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
+  .stat .lab { color: #6a7a86; font-size: 13.5px; }
+  .stat .v { font-family: var(--mono); font-size: 24px; font-weight: 600; margin-top: 3px; color: var(--ink); }
+  .stat .v.red { color: #b21f31; }
+  .chaincard .foot { margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(10,20,32,.1);
+                     color: #55656f; font-size: 14px; }
+  .contrast-note { margin-top: 30px; color: #3a4b57; max-width: 66ch; font-size: 16.5px; }
+
+  /* ---------- WHY (three beats) ---------- */
+  .beats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 46px; }
+  .beat h3 { font-size: 20px; margin-bottom: 10px; color: var(--ink); }
+  .beat p { color: #45555f; font-size: 16px; margin: 0; }
+  .beat .kbit { font-family: var(--mono); color: #146a5e; font-size: 14px; display: block; margin-top: 12px; }
+
+  /* ---------- DASHBOARD ---------- */
+  .dash-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 40px; }
+  .dash-head .section-lede { color: var(--muted); }
+  .tabs { display: inline-flex; gap: 6px; padding: 5px; border: 1px solid var(--line);
+          border-radius: 10px; background: var(--panel); }
+  .tabs button { font-family: var(--sans); background: transparent; border: 0; color: var(--muted);
+                 border-radius: 7px; padding: 9px 18px; font-size: 15px; font-weight: 500; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--abyss); color: var(--paper);
+                 box-shadow: inset 0 0 0 1px var(--line); }
+  .meta { color: var(--muted); font-family: var(--mono); font-size: 13px; margin: 22px 0 0; }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 26px 0 40px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; background: var(--panel); }
+  .card .k { color: var(--muted); font-size: 13.5px; }
+  .card .v { font-family: var(--mono); font-size: 30px; font-weight: 600; margin-top: 8px; letter-spacing: -0.02em; }
+  .card.cov .v { color: var(--backed); }
+  .card.phantom .v { color: var(--phantom); }
+  .card.phantom { border-color: var(--phantom-dim); }
+  .card.cov { border-color: var(--backed-dim); }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  caption { text-align: left; }
+  th, td { text-align: right; padding: 11px 16px; border-bottom: 1px solid var(--line);
+           white-space: nowrap; font-size: 14px; }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; position: sticky; top: 0;
+       background: #0c2843; z-index: 2; }
   th:first-child, td:first-child, th.l, td.l { text-align: left; }
-  tr:last-child td { border-bottom: 0; }
-  .maker a { color: var(--fg); text-decoration: none; }
-  .maker a:hover { color: var(--accent); }
-  .bar { display: inline-block; width: 70px; height: 8px; background: #2a323c; border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .maker a { color: var(--paper); font-family: var(--mono); }
+  .maker a:hover { color: var(--backed); }
+  .bar { display: inline-block; width: 68px; height: 8px; background: #12314a; border-radius: 5px;
+         overflow: hidden; vertical-align: middle; margin-right: 9px; }
   .bar > span { display: block; height: 100%; }
-  .cov-red { color: var(--red); } .cov-amber { color: var(--amber); } .cov-green { color: var(--green); }
-  .pill { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
-  footer { color: var(--muted); font-size: 13px; margin-top: 40px; border-top: 1px solid var(--line); padding-top: 18px; }
-  code { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 12.5px; }
-  @media (max-width: 720px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  .cov-red { color: var(--phantom); } .cov-amber { color: #e9a13b; } .cov-green { color: var(--backed); }
+  .pill { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+          padding: 2px 9px; font-family: var(--sans); }
+  .ph-red { color: var(--phantom); }
+  .subhead { font-size: 17px; font-weight: 600; margin: 44px 0 6px; color: var(--paper); }
+  .subhead .hint { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 8px; }
+
+  /* ---------- TOOLS PIPELINE ---------- */
+  .pipe { margin-top: 48px; display: grid; gap: 0; }
+  .step { display: grid; grid-template-columns: auto 1fr; gap: 26px; padding: 30px 0; position: relative; }
+  .step + .step { border-top: 1px solid var(--line); }
+  .step .rail { display: flex; flex-direction: column; align-items: center; }
+  .step .dot { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+               background: var(--panel); display: grid; place-items: center; flex: none; }
+  .step .dot svg { width: 22px; height: 22px; }
+  .step .body h3 { font-size: 22px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .step .body h3 .role { color: var(--muted); font-family: var(--mono); font-size: 13px; font-weight: 400; }
+  .step .body p { color: #c2d0d9; max-width: 68ch; margin: 12px 0 0; font-size: 16px; }
+  .step .proof { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .proof .prow { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 11px 16px;
+                 font-size: 14px; align-items: center; }
+  .proof .prow + .prow { border-top: 1px solid var(--line); }
+  .proof .prow .lbl { color: var(--muted); }
+  .proof .prow .val { font-family: var(--mono); font-size: 14px; }
+  .proof .prow.pass .val { color: var(--backed); }
+  .proof .prow.fail .val { color: var(--phantom); }
+
+  /* ---------- MCP / SKILL ---------- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; align-items: start; }
+  pre { margin: 0; background: #050f19; border: 1px solid rgba(255,255,255,.06); border-radius: 10px;
+        padding: 18px 20px; overflow-x: auto; }
+  code, pre { font-family: var(--mono); font-size: 14px; }
+  pre code { color: #cfe0e8; }
+  .band--paper pre { background: #0c1a24; }
+  .band--paper pre code { color: #cfe0e8; }
+  .cmt { color: var(--muted); }
+  .prompts { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .prompts li { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--panel); }
+  .prompts .q { color: var(--paper); font-size: 15.5px; }
+  .prompts .t { display: block; margin-top: 7px; color: var(--backed); font-family: var(--mono); font-size: 13px; }
+  .toollist { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .toollist li { font-size: 15.5px; color: #c2d0d9; }
+  .toollist code { color: var(--backed); background: rgba(63,174,158,.08); padding: 2px 7px; border-radius: 5px; }
+
+  .skill-block { border: 1px solid rgba(10,20,32,.14); border-radius: 12px; background: #fff; padding: 28px 30px; margin-top: 36px; }
+  .skill-block h3 { font-size: 20px; color: var(--ink); }
+  .skill-block p { color: #45555f; max-width: 70ch; font-size: 16px; }
+  .skill-block .name { font-family: var(--mono); color: #146a5e; }
+  .triggers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .triggers span { font-family: var(--mono); font-size: 13px; color: #45555f; background: #dde6e9;
+                   border-radius: 999px; padding: 4px 12px; }
+
+  /* ---------- ARCHITECTURE ---------- */
+  .arch { margin-top: 44px; }
+  .arch-svg { width: 100%; height: auto; display: block; }
+  .arch-caps { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 18px 30px; }
+  .arch-caps div { font-size: 15px; color: #c2d0d9; }
+  .arch-caps b { color: var(--paper); font-weight: 600; }
+
+  /* ---------- VERIFY / REPO ---------- */
+  .verify-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; margin-top: 36px; align-items: start; }
+  .linkrows { display: grid; gap: 2px; }
+  .linkrow { display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(10,20,32,.12); align-items: baseline; }
+  .linkrow .lk { color: #6a7a86; font-size: 14px; }
+  .linkrow a { font-family: var(--mono); font-size: 13.5px; word-break: break-all; }
+
+  footer { background: var(--ink); color: var(--muted); padding: 40px 0; font-size: 14px; }
+  footer .inner { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: baseline; justify-content: space-between; }
+  footer b { color: var(--paper); font-weight: 600; }
+  footer .formula { font-family: var(--mono); font-size: 13px; }
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width: 900px) {
+    .hero .inner { grid-template-columns: 1fr; }
+    .hero { padding-top: 72px; min-height: auto; }
+    .column { max-width: 320px; order: -1; }
+    .compare, .split, .verify-grid { grid-template-columns: 1fr; }
+    .beats { grid-template-columns: 1fr; gap: 30px; }
+    .cards { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    .grid2 { grid-template-columns: 1fr 1fr; }
+    .cards { grid-template-columns: 1fr 1fr; }
+    .headfig { gap: 26px 34px; }
+    .step { grid-template-columns: 1fr; gap: 14px; }
+    .step .rail { flex-direction: row; }
+  }
+
+  /* ---------- MOTION (single orchestrated moment) ---------- */
+  .water, .rule, .backed-band { transition: none; }
+  .js-anim .water { height: 0; }
+  .js-anim .rule { bottom: 0; }
+  .js-anim .backed-band { bottom: 0; height: 0; opacity: 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .js-anim .water { transition: height 1600ms cubic-bezier(.22,.61,.36,1); }
+    .js-anim .rule { transition: bottom 1600ms cubic-bezier(.22,.61,.36,1); }
+    .js-anim .backed-band { transition: bottom 1600ms cubic-bezier(.22,.61,.36,1), height 900ms ease 600ms, opacity 700ms ease 700ms; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Overdraft</h1>
-    <p class="tag">How much of 1inch Aqua's advertised liquidity actually exists.</p>
-    <p class="meta" id="meta">loading…</p>
-  </header>
+<a class="skip" href="#dashboard">Skip to live dashboard</a>
 
-  <div class="tabs" id="tabs">
-    <button data-chain="ethereum" class="active">Ethereum</button>
-    <button data-chain="base">Base</button>
+<!-- ============ HERO ============ -->
+<header class="band hero">
+  <div class="inner">
+    <div>
+      <div class="brandmark">
+        <b>Overdraft</b>
+        <span>1inch Aqua solvency · ETHOnline 2026</span>
+      </div>
+      <h1>Advertised depth isn't the same as real depth.</h1>
+      <p class="lede">On 1inch Aqua, one wallet can quote liquidity many times over. Overdraft measures how much of it is actually backed.</p>
+
+      <div class="headfig">
+        <span class="fig">
+          <span class="n teal num">6.3%</span>
+          <span class="cap">of Ethereum's <b>$25.3M</b> quoted Aqua depth is actually backed on-chain</span>
+        </span>
+        <span class="fig">
+          <span class="n red num">$23.9M</span>
+          <span class="cap"><b>phantom</b> depth: quoted liquidity no maker's wallet can honour</span>
+        </span>
+      </div>
+
+      <div class="heroctas">
+        <a class="btn btn-solid" href="#dashboard">See the live leaderboard</a>
+        <a class="btn btn-ghost" href="https://github.com/LeonardoRyuta/overdraft" target="_blank" rel="noopener">Read the code</a>
+      </div>
+    </div>
+
+    <!-- waterline visual -->
+    <div>
+      <figure class="column" aria-label="Waterline: only a 6.3% sliver of the $25.3M quoted Ethereum depth floats above the line as backed; 93.7% is submerged phantom." style="margin:0;">
+        <div class="col-inner" id="colInner">
+          <div class="quoted-cap">
+            <span class="lab">Quoted depth</span>
+            <span class="val num">$25.3M</span>
+          </div>
+          <div class="water" id="water">
+            <div class="phantom-label">
+              <span class="lab">Below the line, phantom depth</span>
+              <span class="val num">$23.9M</span>
+              <span class="sub num">93.7% of quoted depth</span>
+            </div>
+          </div>
+          <div class="backed-band" id="backedBand">
+            <span class="bl num">Backed · $1.6M</span>
+          </div>
+          <div class="rule" id="rule">
+            <div class="line"></div>
+            <div class="tag num">waterline · 6.3%</div>
+          </div>
+        </div>
+      </figure>
+      <p class="col-caption">The load line. What floats is what a maker can settle; what's submerged is quoted but unbacked.</p>
+    </div>
   </div>
+</header>
 
-  <div class="cards" id="cards"></div>
+<!-- ============ THE FINDING ============ -->
+<section class="band band--paper" id="finding">
+  <div class="inner">
+    <h2 class="section-h">The finding</h2>
+    <p class="section-lede">Every live position on each chain, enumerated from The Graph, with its backing read live on-chain. Two networks, one schema — and the same protocol tells a very different story on each.</p>
 
-  <h2 id="lbh">Coverage leaderboard — worst first</h2>
-  <div class="scroll">
-    <table>
-      <thead><tr>
-        <th class="l">Maker</th><th class="l">Token</th><th>Coverage</th>
-        <th>Quoted</th><th>Backed</th><th>Phantom</th><th class="l">Binding</th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
+    <div class="compare">
+      <div class="chaincard eth">
+        <h3>Ethereum <span class="cov num">6.3%</span></h3>
+        <div class="covbar"><span style="width:6.3%"></span></div>
+        <div class="grid2">
+          <div class="stat"><div class="lab">Quoted depth</div><div class="v num">$25.3M</div></div>
+          <div class="stat"><div class="lab">Backed depth</div><div class="v num">$1.6M</div></div>
+          <div class="stat"><div class="lab">Phantom</div><div class="v num red">$23.9M</div></div>
+          <div class="stat"><div class="lab">Active positions</div><div class="v num">1,485</div></div>
+        </div>
+        <div class="foot">1,046 positions under-backed · 11 degenerate (excluded). The largest single position commits 2,420 WETH + 4.44M USDC, approves Aqua at max, and holds $0.</div>
+      </div>
+
+      <div class="chaincard base">
+        <h3>Base <span class="cov num">51.7%</span></h3>
+        <div class="covbar"><span style="width:51.7%"></span></div>
+        <div class="grid2">
+          <div class="stat"><div class="lab">Quoted depth</div><div class="v num">$88K</div></div>
+          <div class="stat"><div class="lab">Backed depth</div><div class="v num">$45K</div></div>
+          <div class="stat"><div class="lab">Phantom</div><div class="v num red">$71K</div></div>
+          <div class="stat"><div class="lab">Active positions</div><div class="v num">134</div></div>
+        </div>
+        <div class="foot">75 positions under-backed. Base's count independently matches a keyless Blockscout full-sweep — two enumeration paths agree.</div>
+      </div>
+    </div>
+
+    <p class="contrast-note">Coverage varies sharply by chain: Base's makers are far better funded than Ethereum's. That's the point of measuring per chain, per maker, live — a single global number would hide it. <a href="#dashboard">Open the live dashboard</a> to walk every position, worst first.</p>
   </div>
+</section>
 
-  <h2 id="degh" style="display:none">Degenerate positions — virtual balance exceeds token supply</h2>
-  <div class="scroll" id="degwrap" style="display:none">
-    <table><thead><tr><th class="l">Maker</th><th class="l">Token</th><th class="l">Note</th></tr></thead>
-    <tbody id="deg"></tbody></table>
+<!-- ============ WHY THIS EXISTS ============ -->
+<section class="band band--paper" id="why" style="padding-top:0;">
+  <div class="inner">
+    <h2 class="section-h">Why this gap exists</h2>
+    <p class="section-lede">Aqua's design makes phantom depth possible, its immutability makes it stick, and until now nobody was computing the ratio that reveals it.</p>
+
+    <div class="beats">
+      <div class="beat">
+        <h3>Virtual balances</h3>
+        <p>Aqua is a registry, not a pool. Tokens stay in the maker's wallet; the contract stores allowance records. So $100k of real balance can quote $300k of depth across many positions. That's the feature — and the loophole.</p>
+      </div>
+      <div class="beat">
+        <h3>Immutability</h3>
+        <p>Aqua strategies are immutable once shipped. A misconfigured or under-backed position can't be edited — it can only be docked or left running, advertising depth it can't deliver.</p>
+      </div>
+      <div class="beat">
+        <h3>Nobody computed it</h3>
+        <p>Quoted depth is published; backed depth is not. The ratio between them is a position's real solvency. Aqua's eight audits cover the contracts — not whether a maker's wallet can honour what its positions advertise.</p>
+        <span class="kbit">coverage = min(wallet, allowance→Aqua) / Σ committed</span>
+      </div>
+    </div>
   </div>
+</section>
 
-  <footer>
-    <p><b>coverage</b> = min(wallet balance, allowance→Aqua) / Σ virtual balance committed, per (maker, token).
-       <b>phantom</b> = quoted − backed. Every figure read live from mainnet state; degenerate positions
-       (committed &gt; token supply) are excluded from the headline.</p>
-    <p>Reproduce: <code>cd packages/coverage &amp;&amp; node src/run.js --chain ethereum --deep</code> ·
-       <a href="https://github.com/LeonardoRyuta/overdraft">source</a></p>
-  </footer>
-</div>
+<!-- ============ LIVE DASHBOARD ============ -->
+<section class="band" id="dashboard">
+  <div class="inner">
+    <div class="dash-head">
+      <div>
+        <h2 class="section-h">Live coverage leaderboard</h2>
+        <p class="section-lede measure">Loaded from committed subgraph snapshots. Switch chains; the table lists every real position worst-coverage first.</p>
+      </div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Select chain">
+        <button role="tab" id="tab-ethereum" aria-controls="dashpanel" aria-selected="true" data-chain="ethereum">Ethereum</button>
+        <button role="tab" id="tab-base" aria-controls="dashpanel" aria-selected="false" data-chain="base">Base</button>
+      </div>
+    </div>
+
+    <p class="meta" id="meta">Loading…</p>
+
+    <div id="dashpanel" role="tabpanel" aria-labelledby="tab-ethereum">
+      <div class="cards" id="cards"></div>
+
+      <h3 class="subhead" id="lbh">Every position, worst coverage first<span class="hint" id="lbhint"></span></h3>
+      <div class="scroll">
+        <table>
+          <caption class="sr-only" style="position:absolute;left:-9999px;">Per-position coverage, sorted worst first</caption>
+          <thead><tr>
+            <th class="l" scope="col">Maker</th>
+            <th class="l" scope="col">Token</th>
+            <th class="num" scope="col">Coverage</th>
+            <th class="num" scope="col">Quoted</th>
+            <th class="num" scope="col">Backed</th>
+            <th class="num" scope="col">Phantom</th>
+            <th class="l" scope="col">Binding</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <h3 class="subhead" id="degh" style="display:none">Degenerate positions<span class="hint">virtual balance exceeds the token's entire supply — excluded from the headline</span></h3>
+      <div class="scroll" id="degwrap" style="display:none">
+        <table>
+          <thead><tr><th class="l" scope="col">Maker</th><th class="l" scope="col">Token</th><th class="l" scope="col">Note</th></tr></thead>
+          <tbody id="deg"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS — FOUR TOOLS ============ -->
+<section class="band" id="how" style="padding-top:0;">
+  <div class="inner">
+    <h2 class="section-h">How it works</h2>
+    <p class="section-lede measure">Four tools, run in order: measure the gap, verify it executes as quoted, ship the instruction that refuses to overquote, and serve it all over live data.</p>
+
+    <div class="pipe">
+      <!-- Measure -->
+      <div class="step">
+        <div class="rail">
+          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><path d="M3 12h4l2 5 3-12 2 9 2-4h4"/></svg></span>
+        </div>
+        <div class="body">
+          <h3>Measure <span class="role">coverage engine</span></h3>
+          <p>Enumerate every active position from The Graph — one schema deployed per network — then read each maker's real backing live on-chain: <code>min(balanceOf, allowance→Aqua)</code> against summed virtual balances. USD priced via DefiLlama; positions whose commitment exceeds a token's total supply are flagged degenerate and excluded from the headline. Sampled top-15 positions matched on-chain <code>rawBalances</code> 15/15.</p>
+        </div>
+      </div>
+
+      <!-- Verify -->
+      <div class="step">
+        <div class="rail">
+          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><path d="M20 6L9 17l-5-5"/></svg></span>
+        </div>
+        <div class="body">
+          <h3>Verify <span class="role">the Honesty Probe, mainnet fork</span></h3>
+          <p>Take a real, live wstETH/1INCH position and prove two things on a Foundry fork. First, quote equals execution to the wei when backing exists. Then, ask the quote for depth the maker can't cover — it happily returns 15,818 1INCH against a maker holding ~11,298 — and watch the swap revert at settlement.</p>
+          <div class="proof">
+            <div class="prow pass"><span class="lbl">Quote vs. executed swap, when backed</span><span class="val">exact match, 0 wei diff</span></div>
+            <div class="prow fail"><span class="lbl">Oversized quote: 15,818 1INCH vs. ~11,298 held</span><span class="val">reverts SafeTransferFromFailed</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fix -->
+      <div class="step">
+        <div class="rail">
+          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6l2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6l2.1-2.1"/><circle cx="12" cy="12" r="3.4"/></svg></span>
+        </div>
+        <div class="body">
+          <h3>Fix <span class="role">SolvencyGuard, a SwapVM instruction</span></h3>
+          <p>A custom SwapVM instruction appended to a maker's program. Unguarded, a position quotes 90,909 WETH backed by 5 WETH — an 18,181× overcommit. With the one-byte guard appended, the same quote reverts <code>InsufficientCoverage</code>, naming exactly what's missing — refused at quote time, not at settlement. Backed makers are never blocked; only the overcommit is.</p>
+          <div class="proof">
+            <div class="prow fail"><span class="lbl">Unguarded quote (5 WETH backing)</span><span class="val">90,909 WETH · 18,181× phantom</span></div>
+            <div class="prow pass"><span class="lbl">Guarded quote, same backing</span><span class="val">reverts InsufficientCoverage</span></div>
+            <div class="prow pass"><span class="lbl">Fork test suite</span><span class="val">4 / 4 pass</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Query -->
+      <div class="step">
+        <div class="rail">
+          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+        </div>
+        <div class="body">
+          <h3>Query <span class="role">MCP server + agent SKILL</span></h3>
+          <p>The same coverage data behind an MCP server, so any agent can ask about Aqua solvency in plain language over live Graph data — network totals, worst offenders, degenerate positions, or one maker's per-token coverage. Enumeration is load-bearing on The Graph; the backed side is always read live on-chain.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ USE THE MCP ============ -->
+<section class="band band--paper" id="mcp">
+  <div class="inner">
+    <h2 class="section-h">Use the MCP</h2>
+    <p class="section-lede">Run the server locally and register it with any MCP client — Claude Desktop, Claude Code, or your own. Every figure is read live; nothing is mocked.</p>
+
+    <div class="split">
+      <div>
+        <pre><code><span class="cmt"># start the coverage MCP server</span>
+cd apps/mcp &amp;&amp; npm install
+
+<span class="cmt"># optional — use live Graph data instead of the</span>
+<span class="cmt"># keyless Blockscout fallback</span>
+export SUBGRAPH_URL="https://api.studio.thegraph.com/\
+query/&lt;id&gt;/overdraft/&lt;version&gt;"
+
+node src/server.js   <span class="cmt"># stdio MCP server</span></code></pre>
+        <ul class="toollist">
+          <li><code>aqua_coverage_summary</code> — network totals: quoted vs. backed, aggregate coverage, phantom, under-backed and degenerate counts.</li>
+          <li><code>aqua_most_overcommitted</code> — worst-coverage positions, ascending.</li>
+          <li><code>aqua_degenerate_positions</code> — positions whose virtual balance exceeds token supply.</li>
+          <li><code>aqua_maker_coverage</code> — per-token coverage for one maker.</li>
+        </ul>
+      </div>
+      <div>
+        <ul class="prompts">
+          <li>
+            <span class="q">"What is total phantom depth on Ethereum right now?"</span>
+            <span class="t">aqua_coverage_summary(ethereum)</span>
+          </li>
+          <li>
+            <span class="q">"Which makers are most over-committed on Base?"</span>
+            <span class="t">aqua_most_overcommitted(base, limit)</span>
+          </li>
+          <li>
+            <span class="q">"Are any positions advertising more than the token's supply?"</span>
+            <span class="t">aqua_degenerate_positions(ethereum)</span>
+          </li>
+          <li>
+            <span class="q">"Does maker 0x21cb… have enough backing for what it quotes?"</span>
+            <span class="t">aqua_maker_coverage(ethereum, 0x21cb…)</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="skill-block">
+      <h3>The agent SKILL</h3>
+      <p><span class="name">aqua-coverage</span> is a reusable SKILL any agent can load as infrastructure. It wraps the four tools above with the context an agent needs to interrogate Aqua liquidity coverage — which makers are over-committed, how much quoted depth is phantom, and which positions advertise more than exists — across every live position on a chain. Point <span class="name">SUBGRAPH_URL</span> at the Overdraft subgraph and enumeration runs on live Graph data; the backed side is always read live on-chain. It loads when an agent is asked about any of these:</p>
+      <div class="triggers">
+        <span>Aqua solvency</span>
+        <span>coverage</span>
+        <span>phantom depth</span>
+        <span>over-committed makers</span>
+        <span>ethereum / base / arbitrum</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section class="band" id="architecture">
+  <div class="inner">
+    <h2 class="section-h">Architecture</h2>
+    <p class="section-lede measure">One registry, two enumeration tracks into the coverage engine — which fans out to the MCP and the leaderboard — plus a fork branch that verifies the finding and ships the fix.</p>
+
+    <div class="arch">
+      <svg class="arch-svg" viewBox="0 0 960 430" role="img" aria-label="Architecture: Aqua registry feeds a subgraph and a Substreams module, which feed the coverage engine (with live eth_call reads). The engine feeds the MCP server and the public leaderboard. A mainnet-fork branch runs the Honesty Probe, which leads to the SolvencyGuard instruction.">
+        <defs>
+          <marker id="arw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0L10 5L0 10z" fill="#3fae9e"/>
+          </marker>
+          <marker id="arwr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0L10 5L0 10z" fill="#d7263d"/>
+          </marker>
+          <style>
+            .box{fill:#0b2236;stroke:#16354f;stroke-width:1;rx:10;}
+            .box.eng{stroke:#3fae9e;}
+            .box.guard{stroke:#d7263d;}
+            .t{fill:#e9eef0;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;}
+            .st{fill:#7f93a3;font-family:'IBM Plex Mono',monospace;font-size:11.5px;}
+            .edge{stroke:#3fae9e;stroke-width:1.4;fill:none;marker-end:url(#arw);}
+            .edge.dash{stroke-dasharray:5 4;}
+            .edge.red{stroke:#d7263d;marker-end:url(#arwr);}
+            .elab{fill:#7f93a3;font-family:'IBM Plex Mono',monospace;font-size:10.5px;}
+          </style>
+        </defs>
+
+        <!-- registry -->
+        <rect class="box" x="20" y="180" width="180" height="66" rx="10"/>
+        <text class="t" x="36" y="210">Aqua registry</text>
+        <text class="st" x="36" y="230">same address · 16 chains</text>
+
+        <!-- subgraph -->
+        <rect class="box" x="290" y="70" width="200" height="66" rx="10"/>
+        <text class="t" x="306" y="100">Subgraph</text>
+        <text class="st" x="306" y="120">ETH + Base · one schema</text>
+
+        <!-- substreams -->
+        <rect class="box" x="290" y="290" width="200" height="66" rx="10"/>
+        <text class="t" x="306" y="320">Substreams</text>
+        <text class="st" x="306" y="340">Firehose-only chains</text>
+
+        <!-- coverage engine -->
+        <rect class="box eng" x="560" y="176" width="200" height="76" rx="10"/>
+        <text class="t" x="576" y="206">Coverage engine</text>
+        <text class="st" x="576" y="226">min(wallet, allowance)</text>
+        <text class="st" x="576" y="242">/ Σ virtual · USD priced</text>
+
+        <!-- MCP -->
+        <rect class="box" x="820" y="96" width="120" height="60" rx="10"/>
+        <text class="t" x="836" y="122">MCP</text>
+        <text class="st" x="836" y="140">+ SKILL</text>
+
+        <!-- leaderboard -->
+        <rect class="box" x="820" y="270" width="120" height="60" rx="10"/>
+        <text class="t" x="836" y="296">Leaderboard</text>
+        <text class="st" x="836" y="314">public site</text>
+
+        <!-- probe -->
+        <rect class="box" x="290" y="382" width="200" height="40" rx="10" style="display:none"/>
+
+        <!-- edges from registry -->
+        <path class="edge" d="M200 205 C 245 205, 250 103, 288 103"/>
+        <text class="elab" x="212" y="150">Shipped / Docked</text>
+        <path class="edge dash" d="M200 221 C 245 221, 250 323, 288 323"/>
+        <text class="elab" x="214" y="270">Firehose</text>
+
+        <!-- subgraph/substreams -> engine -->
+        <path class="edge" d="M490 103 C 530 103, 528 200, 558 200"/>
+        <path class="edge dash" d="M490 323 C 530 323, 528 228, 558 228"/>
+
+        <!-- live eth_call registry -> engine (curved over top) -->
+        <path class="edge" d="M110 180 C 110 30, 660 20, 660 174"/>
+        <text class="elab" x="300" y="26">live eth_call · balanceOf / allowance / rawBalances</text>
+
+        <!-- engine -> MCP + leaderboard -->
+        <path class="edge" d="M760 196 C 795 196, 800 128, 818 128"/>
+        <path class="edge" d="M760 232 C 795 232, 800 298, 818 298"/>
+
+        <!-- fork branch: registry -> probe -> guard (bottom, red) -->
+        <rect class="box" x="560" y="330" width="180" height="52" rx="10"/>
+        <text class="t" x="576" y="356">Honesty Probe</text>
+        <text class="st" x="576" y="372">mainnet fork · quote vs swap</text>
+
+        <rect class="box guard" x="770" y="378" width="170" height="44" rx="10"/>
+        <text class="t" x="786" y="405">SolvencyGuard</text>
+
+        <path class="edge red" d="M130 246 C 130 356, 556 356, 558 356"/>
+        <text class="elab" x="180" y="380" style="fill:#d7263d">mainnet fork</text>
+        <path class="edge red" d="M740 372 C 758 386, 760 400, 768 400"/>
+      </svg>
+
+      <div class="arch-caps">
+        <div><b>Index</b> — Subgraph + Substreams on one schema, both Graph tracks.</div>
+        <div><b>Diagnose</b> — the engine joins quoted depth with live-read backed depth into a per-(maker, token) ratio.</div>
+        <div><b>Verify</b> — a Foundry fork probe proves quote-vs-execution divergence and phantom fills.</div>
+        <div><b>Fix</b> — SolvencyGuard makes a position refuse to quote beyond real backing.</div>
+        <div><b>Serve</b> — an MCP server, a SKILL, and this public leaderboard over the same data.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VERIFY / REPO ============ -->
+<section class="band band--paper" id="verify">
+  <div class="inner">
+    <h2 class="section-h">Verify our claims</h2>
+    <p class="section-lede">Nothing here is asserted. Regenerate the headline number yourself, reconstruct a real position from on-chain bytes, and cross-check coverage on a fork.</p>
+
+    <div class="verify-grid">
+      <pre><code><span class="cmt"># reproduce the Ethereum coverage scan + headline</span>
+<span class="cmt"># (keyless: Blockscout + public RPC + DefiLlama)</span>
+cd packages/coverage &amp;&amp; npm install
+node src/run.js --chain ethereum --deep
+
+<span class="cmt"># reconstruct a real position's Order from on-chain</span>
+<span class="cmt"># Shipped bytes (verifies keccak256(strategy)==hash)</span>
+cd spikes/order &amp;&amp; npx tsx recover-order.mjs
+
+<span class="cmt"># on-chain coverage cross-check on a mainnet fork</span>
+cd contracts &amp;&amp; forge test -vv</code></pre>
+
+      <div class="linkrows">
+        <div class="linkrow"><span class="lk">Repository</span><a href="https://github.com/LeonardoRyuta/overdraft" target="_blank" rel="noopener">github.com/LeonardoRyuta/overdraft</a></div>
+        <div class="linkrow"><span class="lk">Live leaderboard</span><a href="https://leonardoryuta.github.io/overdraft/" target="_blank" rel="noopener">leonardoryuta.github.io/overdraft</a></div>
+        <div class="linkrow"><span class="lk">Subgraph · Ethereum</span><a href="https://api.studio.thegraph.com/query/1724457/overdraft/v0.0.1" target="_blank" rel="noopener">api.studio.thegraph.com/query/1724457/overdraft/v0.0.1</a></div>
+        <div class="linkrow"><span class="lk">Subgraph · Base</span><a href="https://api.studio.thegraph.com/query/1724457/overdraft-base/v0.0.1" target="_blank" rel="noopener">api.studio.thegraph.com/query/1724457/overdraft-base/v0.0.1</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="inner">
+    <div>
+      <b>Overdraft</b> — measuring how much of 1inch Aqua's advertised liquidity actually exists.
+      <div class="formula" style="margin-top:8px;">coverage = min(wallet, allowance→Aqua) / Σ virtual committed · phantom = max(0, committed − backed)</div>
+    </div>
+    <div>ETHOnline 2026 · figures verified against on-chain rawBalances</div>
+  </div>
+</footer>
 
 <script>
-const usd = (x) => "$" + Math.round(x || 0).toLocaleString("en-US");
-const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
-const covClass = (r) => r == null ? "" : r < 0.7 ? "cov-red" : r < 1 ? "cov-amber" : "cov-green";
-const covColor = (r) => r == null ? "#8b98a5" : r < 0.7 ? "#ff5c5c" : r < 1 ? "#ffb454" : "#3fb950";
+"use strict";
 
-function render(d) {
-  const h = d.headline;
-  const under = d.real.filter(r => r.ratio !== null && r.ratio < 0.999).length;
-  document.getElementById("meta").textContent =
-    `${d.chain} · source: ${d.source} · ${d.real.length} real positions (${under} under-backed) · ${d.degenerate.length} degenerate · ${h.priced} priced`;
+/* ---------- hero waterline: one orchestrated moment ---------- */
+(function () {
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var water = document.getElementById("water");
+  var rule = document.getElementById("rule");
+  var band = document.getElementById("backedBand");
+  var colInner = document.getElementById("colInner");
+  if (!water || !rule || !band || !colInner) return;
 
-  document.getElementById("cards").innerHTML = [
-    ["Quoted depth", usd(h.usdQuoted), ""],
-    ["Backed depth", usd(h.usdBacked), ""],
-    ["Aggregate coverage", h.coverageUsd == null ? "n/a" : (h.coverageUsd * 100).toFixed(1) + "%", "cov"],
-    ["Phantom depth", usd(h.usdPhantom), "phantom"],
-  ].map(([k, v, c]) => `<div class="card ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  // Ethereum: coverage 6.3% -> backed sliver is 6.3% of column; phantom fills the rest below the line.
+  var coverage = 0.063;                 // backed / quoted (aggregate USD)
+  var bandH = Math.max(4, coverage * 100); // % of column height for the teal backed sliver
+  var waterTop = bandH;                 // waterline sits just under the backed band
+  var waterH = 100 - waterTop;          // phantom region height, %
 
-  const explorer = d.chain === "base" ? "https://basescan.org/address/"
-    : d.chain === "arbitrum" ? "https://arbiscan.io/address/" : "https://etherscan.io/address/";
-  const shown = d.real.slice(0, 200);
-  document.getElementById("lbh").textContent = `Coverage leaderboard — worst first (showing ${shown.length} of ${d.real.length})`;
-  document.getElementById("rows").innerHTML = shown.map(r => {
-    const pctv = r.ratio == null ? null : Math.min(r.ratio, 1.5);
-    const w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
-    const covTxt = r.ratio == null ? "n/a" : (r.ratio * 100).toFixed(1) + "%";
-    return `<tr>
-      <td class="l maker"><a href="${explorer}${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
-      <td class="l">${r.symbol || "?"}</td>
-      <td><span class="bar"><span style="width:${w}%;background:${covColor(r.ratio)}"></span></span><span class="${covClass(r.ratio)}">${covTxt}</span></td>
-      <td>${usd(r.usdQuoted)}</td><td>${usd(r.usdBacked)}</td>
-      <td class="${r.usdPhantom > 0 ? 'cov-red' : ''}">${usd(r.usdPhantom)}</td>
-      <td class="l"><span class="pill">${r.binding}</span></td>
-    </tr>`;
-  }).join("");
+  function place() {
+    water.style.height = waterH + "%";
+    rule.style.bottom = waterH + "%";
+    band.style.bottom = waterH + "%";
+    band.style.height = bandH + "%";
+    band.style.opacity = "1";
+  }
 
-  const showDeg = d.degenerate.length > 0;
-  document.getElementById("degh").style.display = showDeg ? "" : "none";
-  document.getElementById("degwrap").style.display = showDeg ? "" : "none";
-  document.getElementById("deg").innerHTML = !showDeg ? "" : d.degenerate.map(r => `<tr>
-      <td class="l maker"><a href="${explorer}${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
-      <td class="l">${r.symbol || "?"}</td>
-      <td class="l">advertises more than the token's total supply</td></tr>`).join("");
-}
+  if (reduce) { place(); return; }
 
-function load(chain) {
-  fetch(`./public/coverage-${chain}.json`).then(r => r.json()).then(render)
-    .catch(e => { document.getElementById("meta").textContent = "failed to load " + chain + ": " + e; });
-}
-document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("#tabs button").forEach(x => x.classList.remove("active"));
-  b.classList.add("active");
-  load(b.dataset.chain);
-});
-load("ethereum");
+  // start collapsed, then settle once on load
+  colInner.classList.add("js-anim");
+  // force initial layout, then trigger the transition on next frame
+  requestAnimationFrame(function () {
+    requestAnimationFrame(place);
+  });
+})();
+
+/* ---------- live dashboard ---------- */
+(function () {
+  var usd = function (x) {
+    x = x || 0;
+    if (x >= 1e6) return "$" + (x / 1e6).toFixed(1) + "M";
+    if (x >= 1e3) return "$" + (x / 1e3).toFixed(0) + "K";
+    return "$" + Math.round(x).toLocaleString("en-US");
+  };
+  var usdFull = function (x) { return "$" + Math.round(x || 0).toLocaleString("en-US"); };
+  var shortAddr = function (a) { return a.slice(0, 6) + "…" + a.slice(-4); };
+  var covClass = function (r) { return r == null ? "" : r < 0.7 ? "cov-red" : r < 1 ? "cov-amber" : "cov-green"; };
+  var covColor = function (r) { return r == null ? "#7f93a3" : r < 0.7 ? "#d7263d" : r < 1 ? "#e9a13b" : "#3fae9e"; };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function render(d) {
+    var h = d.headline || {};
+    var under = d.real.filter(function (r) { return r.ratio !== null && r.ratio < 0.999; }).length;
+
+    $("meta").textContent =
+      d.chain + " · source: " + d.source + " · " + d.real.length + " real positions (" +
+      under + " under-backed) · " + d.degenerate.length + " degenerate · " + h.priced + " priced";
+
+    $("cards").innerHTML = [
+      ["Quoted depth", usd(h.usdQuoted), ""],
+      ["Backed depth", usd(h.usdBacked), ""],
+      ["Aggregate coverage", h.coverageUsd == null ? "n/a" : (h.coverageUsd * 100).toFixed(1) + "%", "cov"],
+      ["Phantom depth", usd(h.usdPhantom), "phantom"]
+    ].map(function (row) {
+      return '<div class="card ' + row[2] + '"><div class="k">' + row[0] +
+             '</div><div class="v">' + row[1] + '</div></div>';
+    }).join("");
+
+    var explorer = d.chain === "base" ? "https://basescan.org/address/"
+      : d.chain === "arbitrum" ? "https://arbiscan.io/address/"
+      : "https://etherscan.io/address/";
+
+    var shown = d.real.slice(0, 200);
+    $("lbhint").textContent = "showing " + shown.length + " of " + d.real.length;
+    $("rows").innerHTML = shown.map(function (r) {
+      var pctv = r.ratio == null ? null : Math.min(r.ratio, 1.5);
+      var w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
+      var covTxt = r.ratio == null ? "n/a" : (r.ratio * 100).toFixed(1) + "%";
+      return '<tr>' +
+        '<td class="l maker"><a href="' + explorer + r.maker + '" target="_blank" rel="noopener">' + shortAddr(r.maker) + '</a></td>' +
+        '<td class="l">' + (r.symbol || "?") + '</td>' +
+        '<td class="num"><span class="bar"><span style="width:' + w + '%;background:' + covColor(r.ratio) + '"></span></span><span class="' + covClass(r.ratio) + '">' + covTxt + '</span></td>' +
+        '<td class="num">' + usdFull(r.usdQuoted) + '</td>' +
+        '<td class="num">' + usdFull(r.usdBacked) + '</td>' +
+        '<td class="num ' + (r.usdPhantom > 0 ? 'ph-red' : '') + '">' + usdFull(r.usdPhantom) + '</td>' +
+        '<td class="l"><span class="pill">' + r.binding + '</span></td>' +
+        '</tr>';
+    }).join("");
+
+    var showDeg = d.degenerate.length > 0;
+    $("degh").style.display = showDeg ? "" : "none";
+    $("degwrap").style.display = showDeg ? "" : "none";
+    $("deg").innerHTML = !showDeg ? "" : d.degenerate.map(function (r) {
+      return '<tr>' +
+        '<td class="l maker"><a href="' + explorer + r.maker + '" target="_blank" rel="noopener">' + shortAddr(r.maker) + '</a></td>' +
+        '<td class="l">' + (r.symbol || "?") + '</td>' +
+        '<td class="l">advertises more than the token\'s total supply</td></tr>';
+    }).join("");
+  }
+
+  function load(chain) {
+    $("meta").textContent = "Loading " + chain + "…";
+    fetch("./public/coverage-" + chain + ".json")
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(render)
+      .catch(function (e) {
+        $("meta").textContent = "Could not load " + chain + " snapshot (" + e.message + "). Open the page over HTTP, not file://.";
+      });
+  }
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll("#tabs button"));
+  function selectTab(btn) {
+    tabs.forEach(function (b) { b.setAttribute("aria-selected", b === btn ? "true" : "false"); });
+    $("dashpanel").setAttribute("aria-labelledby", btn.id);
+    load(btn.dataset.chain);
+  }
+  tabs.forEach(function (b, i) {
+    b.addEventListener("click", function () { selectTab(b); });
+    b.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      var next = e.key === "ArrowRight" ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
+      tabs[next].focus();
+      selectTab(tabs[next]);
+    });
+  });
+
+  load("ethereum");
+})();
 </script>
 </body>
 </html>
