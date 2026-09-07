@@ -28,6 +28,38 @@ export async function enumerateBlockscout(chain, { maxPages = 6 } = {}) {
 }
 
 // Paginate the FULL set of active commitments via an id cursor (The Graph caps `first` at 1000).
+// Fallback for chains whose Blockscout v2 API is down (e.g. Base): the legacy Etherscan-compatible
+// /api getLogs endpoint. Events are non-indexed, so we decode maker/app/strategyHash/token from the
+// data words ourselves. Paginates by advancing fromBlock (dedup handles the 1000-cap overlap).
+const PUSHED_TOPIC0 = "0x3f18354abbd5306dd1665c2c90f614a4559e39dd620d04fbe5458e613b6588f3";
+export async function enumerateBlockscoutLegacy(chain, { pageMax = 30 } = {}) {
+  const cfg = CHAINS[chain];
+  if (!cfg || !cfg.blockscout) throw new Error(`no blockscout base for ${chain}`);
+  const tuples = new Map();
+  let from = 0, lastSeen = -1;
+  for (let page = 0; page < pageMax; page++) {
+    const url = `${cfg.blockscout}/api?module=logs&action=getLogs&fromBlock=${from}&toBlock=latest&address=${AQUA}&topic0=${PUSHED_TOPIC0}`;
+    let json;
+    try { json = await (await fetch(url)).json(); } catch { break; }
+    const logs = Array.isArray(json.result) ? json.result : [];
+    if (logs.length === 0) break;
+    for (const log of logs) {
+      const d = log.data.replace(/^0x/, "");
+      const word = (i) => d.slice(i * 64, (i + 1) * 64);
+      const addr = (w) => "0x" + w.slice(24);
+      tuples.set(
+        `${addr(word(0))}|${addr(word(1))}|0x${word(2)}|${addr(word(3))}`.toLowerCase(),
+        { maker: addr(word(0)), app: addr(word(1)), strategyHash: "0x" + word(2), token: addr(word(3)) }
+      );
+    }
+    const last = parseInt(logs[logs.length - 1].blockNumber, 16);
+    if (logs.length < 1000 || last === lastSeen) break; // done, or no progress
+    lastSeen = last;
+    from = last; // re-scan boundary block; dedup by key absorbs the overlap
+  }
+  return [...tuples.values()];
+}
+
 export async function enumerateSubgraph(url, { pageSize = 1000 } = {}) {
   const out = [];
   let lastId = "";

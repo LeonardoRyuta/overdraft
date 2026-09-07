@@ -3,14 +3,20 @@
 //   SUBGRAPH_URL set  -> enumerate from the subgraph (live Graph data)
 //   otherwise         -> enumerate from Blockscout (keyless)
 import { formatUnits } from "viem";
-import { enumerateBlockscout, enumerateSubgraph } from "./enumerate.js";
+import { enumerateBlockscout, enumerateBlockscoutLegacy, enumerateSubgraph } from "./enumerate.js";
+import { CHAINS } from "./chains.js";
 import { rawBalance, readBacking, tokenMeta } from "./reader.js";
 import { coverageByMakerToken, aggregateByToken } from "./coverage.js";
 import { getPricesUSD, toUsd } from "./pricing.js";
 
 export async function scanChain(chain, { subgraphUrl = process.env.SUBGRAPH_URL, maxPages = 6 } = {}) {
-  const source = subgraphUrl ? "subgraph" : "blockscout";
-  const tuples = subgraphUrl ? await enumerateSubgraph(subgraphUrl) : await enumerateBlockscout(chain, { maxPages });
+  const legacy = CHAINS[chain]?.logsApi === "legacy";
+  const source = subgraphUrl ? "subgraph" : legacy ? "blockscout-legacy" : "blockscout";
+  const tuples = subgraphUrl
+    ? await enumerateSubgraph(subgraphUrl)
+    : legacy
+      ? await enumerateBlockscoutLegacy(chain)
+      : await enumerateBlockscout(chain, { maxPages });
 
   // Resolve committed (subgraph provides it; blockscout tuples need a live rawBalances read + liveness filter).
   const commitments = [];

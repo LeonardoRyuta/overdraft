@@ -18,6 +18,8 @@ export const CHAINS = {
     viemChain: base,
     rpcs: ["https://base-rpc.publicnode.com", "https://mainnet.base.org"],
     blockscout: "https://base.blockscout.com",
+    logsApi: "legacy", // base.blockscout v2 API is 500ing; use the legacy /api getLogs
+    aquaStartBlock: 48875000,
   },
   arbitrum: {
     viemChain: arbitrum,

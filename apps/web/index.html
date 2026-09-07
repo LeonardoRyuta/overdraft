@@ -16,6 +16,9 @@
   header h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.5px; }
   header .tag { color: var(--muted); margin: 0 0 4px; }
   header .meta { color: var(--muted); font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .tabs { display: flex; gap: 8px; margin: 20px 0 4px; }
+  .tabs button { background: var(--panel); border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 6px 15px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .tabs button.active { color: var(--fg); border-color: var(--accent); }
   .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
   .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
@@ -47,6 +50,11 @@
     <p class="tag">How much of 1inch Aqua's advertised liquidity actually exists.</p>
     <p class="meta" id="meta">loading…</p>
   </header>
+
+  <div class="tabs" id="tabs">
+    <button data-chain="ethereum" class="active">Ethereum</button>
+    <button data-chain="base">Base</button>
+  </div>
 
   <div class="cards" id="cards"></div>
 
@@ -82,7 +90,7 @@ const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
 const covClass = (r) => r == null ? "" : r < 0.7 ? "cov-red" : r < 1 ? "cov-amber" : "cov-green";
 const covColor = (r) => r == null ? "#8b98a5" : r < 0.7 ? "#ff5c5c" : r < 1 ? "#ffb454" : "#3fb950";
 
-fetch("./public/coverage-ethereum.json").then(r => r.json()).then(d => {
+function render(d) {
   const h = d.headline;
   const under = d.real.filter(r => r.ratio !== null && r.ratio < 0.999).length;
   document.getElementById("meta").textContent =
@@ -95,6 +103,8 @@ fetch("./public/coverage-ethereum.json").then(r => r.json()).then(d => {
     ["Phantom depth", usd(h.usdPhantom), "phantom"],
   ].map(([k, v, c]) => `<div class="card ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
+  const explorer = d.chain === "base" ? "https://basescan.org/address/"
+    : d.chain === "arbitrum" ? "https://arbiscan.io/address/" : "https://etherscan.io/address/";
   const shown = d.real.slice(0, 200);
   document.getElementById("lbh").textContent = `Coverage leaderboard — worst first (showing ${shown.length} of ${d.real.length})`;
   document.getElementById("rows").innerHTML = shown.map(r => {
@@ -102,7 +112,7 @@ fetch("./public/coverage-ethereum.json").then(r => r.json()).then(d => {
     const w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
     const covTxt = r.ratio == null ? "n/a" : (r.ratio * 100).toFixed(1) + "%";
     return `<tr>
-      <td class="l maker"><a href="https://etherscan.io/address/${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
+      <td class="l maker"><a href="${explorer}${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
       <td class="l">${r.symbol || "?"}</td>
       <td><span class="bar"><span style="width:${w}%;background:${covColor(r.ratio)}"></span></span><span class="${covClass(r.ratio)}">${covTxt}</span></td>
       <td>${usd(r.usdQuoted)}</td><td>${usd(r.usdBacked)}</td>
@@ -111,15 +121,25 @@ fetch("./public/coverage-ethereum.json").then(r => r.json()).then(d => {
     </tr>`;
   }).join("");
 
-  if (d.degenerate.length) {
-    document.getElementById("degh").style.display = "";
-    document.getElementById("degwrap").style.display = "";
-    document.getElementById("deg").innerHTML = d.degenerate.map(r => `<tr>
-      <td class="l maker"><a href="https://etherscan.io/address/${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
+  const showDeg = d.degenerate.length > 0;
+  document.getElementById("degh").style.display = showDeg ? "" : "none";
+  document.getElementById("degwrap").style.display = showDeg ? "" : "none";
+  document.getElementById("deg").innerHTML = !showDeg ? "" : d.degenerate.map(r => `<tr>
+      <td class="l maker"><a href="${explorer}${r.maker}" target="_blank" rel="noopener">${short(r.maker)}</a></td>
       <td class="l">${r.symbol || "?"}</td>
       <td class="l">advertises more than the token's total supply</td></tr>`).join("");
-  }
-}).catch(e => { document.getElementById("meta").textContent = "failed to load snapshot: " + e; });
+}
+
+function load(chain) {
+  fetch(`./public/coverage-${chain}.json`).then(r => r.json()).then(render)
+    .catch(e => { document.getElementById("meta").textContent = "failed to load " + chain + ": " + e; });
+}
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  load(b.dataset.chain);
+});
+load("ethereum");
 </script>
 </body>
 </html>
