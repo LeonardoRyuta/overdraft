@@ -29,10 +29,12 @@ phantom  = max(0, committed − backed)
 | chain | active positions | quoted (USD) | backed (USD) | coverage | phantom | under-backed |
 |---|---|---|---|---|---|---|
 | Ethereum | 1,485 (+11 degenerate) | $25.3M | $1.6M | **6.3%** | **$23.9M** | 1,046 |
-| Base | 134 | $87K | $45K | 52.2% | $70K | 75 |
+| Base | 134 | $88K | $45K | 51.7% | $71K | 75 |
 
-Ethereum is served by the live Studio subgraph; Base via keyless Blockscout logs (its Studio subgraph is
-deploying). Coverage varies a lot by chain — Base's makers are far better funded than Ethereum's.
+Both chains run on **live Studio subgraphs** — one schema, redeployed per network (`overdraft`,
+`overdraft-base`). Coverage varies sharply by chain: Base's makers are far better funded than
+Ethereum's. (Base's count independently matches a keyless Blockscout full-sweep — two enumeration
+paths agree.)
 
 Live from the Studio subgraph; regenerate yourself (below). **How to read it:** the biggest single
 position commits **2,420 WETH + 4.44M USDC**, approves Aqua at max, and holds **$0** — pure phantom.
