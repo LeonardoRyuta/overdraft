@@ -4,5 +4,11 @@
       "address": "0x1111113ccf1426a8e30e2bff5e005d929bf6a90a",
       "startBlock": 25567141
     }
+  },
+  "base": {
+    "Aqua": {
+      "address": "0x1111113ccf1426a8e30e2bff5e005d929bf6a90a",
+      "startBlock": 48875000
+    }
   }
 }
