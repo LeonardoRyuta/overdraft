@@ -50,7 +50,7 @@
 
   <div class="cards" id="cards"></div>
 
-  <h2>Coverage leaderboard — worst first</h2>
+  <h2 id="lbh">Coverage leaderboard — worst first</h2>
   <div class="scroll">
     <table>
       <thead><tr>
@@ -95,7 +95,9 @@ fetch("./public/coverage-ethereum.json").then(r => r.json()).then(d => {
     ["Phantom depth", usd(h.usdPhantom), "phantom"],
   ].map(([k, v, c]) => `<div class="card ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
-  document.getElementById("rows").innerHTML = d.real.map(r => {
+  const shown = d.real.slice(0, 200);
+  document.getElementById("lbh").textContent = `Coverage leaderboard — worst first (showing ${shown.length} of ${d.real.length})`;
+  document.getElementById("rows").innerHTML = shown.map(r => {
     const pctv = r.ratio == null ? null : Math.min(r.ratio, 1.5);
     const w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
     const covTxt = r.ratio == null ? "n/a" : (r.ratio * 100).toFixed(1) + "%";

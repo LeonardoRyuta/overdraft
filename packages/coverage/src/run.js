@@ -21,6 +21,7 @@ export async function scanChain(chain, { subgraphUrl = process.env.SUBGRAPH_URL,
       if (rb.tokensCount === 0 || rb.tokensCount === 0xff) continue; // empty / docked → not live
       committed = rb.committed;
     }
+    if (committed === 0n) continue; // active but fully drained — no quoted depth to assess
     commitments.push({ maker: t.maker, token: t.token, committed, app: t.app, strategyHash: t.strategyHash });
   }
 

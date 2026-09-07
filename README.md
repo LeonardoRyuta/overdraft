@@ -9,11 +9,13 @@ depth is an upper bound, not a guarantee. Overdraft computes, for every live pos
 chain, how much of that quoted depth is actually backed on-chain — and ships the SwapVM
 instruction that stops positions overcommitting.
 
-> **Preliminary finding (Ethereum, 2026-09-05, reproducible below):** across **35 live positions**,
-> **$134,510** of quoted Aqua depth is backed by **$131,288** of real balance — leaving
-> **$25,109 of phantom depth across 14 under-backed positions**. Separately, **7 positions advertise
-> a virtual balance larger than their token's entire supply** (can never be backed). *No Aqua coverage
-> tool exists today.* Full multi-chain number lands once the subgraph is live.
+> **Finding (Ethereum, full population via live subgraph, 2026-09-07):** across **1,485 active
+> positions**, only **6.3%** of the **$25.3M** quoted Aqua depth is actually backed (**$1.6M**) —
+> **$23.9M is phantom**, across **1,046 under-backed positions**. Most under-backed makers hold
+> *zero* of the token they committed: they ship a position and approve the protocol, but never fund
+> the wallet. On a five-week-old, incentive-seeded protocol that is expected — and it is exactly why
+> advertised depth ≠ real depth, and why the quoted number can't be trusted at face value.
+> *No other Aqua coverage tool exists.* Every figure is verified against on-chain `rawBalances`.
 
 The core measurement, per `(maker, token)`:
 
@@ -24,15 +26,16 @@ phantom  = max(0, committed − backed)
 
 ## The finding
 
-| chain | live positions | quoted (USD) | backed (USD) | coverage | phantom | under-backed |
+| chain | active positions | quoted (USD) | backed (USD) | coverage | phantom | under-backed |
 |---|---|---|---|---|---|---|
-| Ethereum | 35 real (+7 degenerate) | $134,510 | $131,288 | 97.6% | $25,109 | 14 / 35 |
-| Base | ~127 (Agent C count) | — | — | — | — | *pending subgraph* |
+| Ethereum | 1,485 (+11 degenerate) | $25.3M | $1.6M | **6.3%** | **$23.9M** | 1,046 |
+| Base | ~127 (Agent C count) | — | — | — | — | *subgraph next* |
 
-Numbers are live and drift; regenerate them yourself (below). "Degenerate" = virtual balance exceeds
-the token's total supply, excluded from the headline. One concrete example the naive tools miss: a WETH
-leg holding 2.06 WETH but with only ~1.0 WETH approved to Aqua → **allowance-bound at 69%**, not
-wallet-bound. Wallet-only coverage tools report ~100% and miss it.
+Live from the Studio subgraph; regenerate yourself (below). **How to read it:** the biggest single
+position commits **2,420 WETH + 4.44M USDC**, approves Aqua at max, and holds **$0** — pure phantom.
+Most under-backed positions are unfunded like this (a young, incentive-seeded protocol). "Degenerate" =
+virtual balance exceeds the token's total supply (excluded from the headline). Coverage is `min(wallet,
+allowance)` — so we also catch *allowance-bound* positions that wallet-only tools miss.
 
 ## Why this exists
 
@@ -46,17 +49,17 @@ can't be edited — only docked or left to run.
 real solvency, and nobody computes it. Aqua's eight audits cover the contracts; they don't cover
 whether a maker's wallet can honour what its positions advertise.
 
-## Status (Day 2 of 9 — ETHOnline 2026, ships Sept 13)
+## Status (Day 4 of 9 — ETHOnline 2026, ships Sept 13)
 
 | Component | Status |
 |---|---|
-| Coverage engine (`packages/coverage`) | ✅ live reads + USD pricing + spam classification, reproducible |
-| Subgraph (`indexer/subgraph`) | ✅ builds clean, deploy-ready — awaiting Studio key to go live |
+| Coverage engine (`packages/coverage`) | ✅ live reads + USD pricing + degenerate classification |
+| Subgraph (`indexer/subgraph`) | ✅ **live on Subgraph Studio**, synced, powering the headline |
 | Substreams (`indexer/substreams`) | ✅ builds to `.spkg` — reaches Firehose-only chains subgraphs can't |
-| Probe harness (`contracts/`) | ✅ fork cross-check + taker impersonation · 🔨 full quote-vs-swap in progress |
-| SolvencyGuard SwapVM instruction | 📋 next |
-| MCP server + SKILL | 📋 planned |
-| Coverage leaderboard (web) | 📋 planned |
+| Probe harness (`contracts/`, `packages/probe`) | ✅ fork coverage cross-check + quote-vs-swap + phantom-fill on a real position |
+| SolvencyGuard SwapVM instruction | ✅ compiles + 4 fork tests + before/after payoff demo |
+| MCP server + SKILL (`apps/mcp`) | ✅ 4 tools over live Graph data |
+| Coverage leaderboard (`apps/web`) | ✅ deployed — https://leonardoryuta.github.io/overdraft/ |
 
 ## Architecture
 

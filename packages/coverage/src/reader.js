@@ -1,6 +1,6 @@
 // Live on-chain reads via viem (eth_call works on public RPCs; only getLogs is gated).
 import { createPublicClient, http, fallback } from "viem";
-import { CHAINS, AQUA, AQUA_READ_ABI, ERC20_ABI } from "./chains.js";
+import { CHAINS, AQUA, SWAPVM_ROUTER, AQUA_READ_ABI, ERC20_ABI } from "./chains.js";
 
 const clients = {};
 export function client(chain) {
@@ -34,11 +34,15 @@ export async function tokenMeta(chain, token) {
   return m;
 }
 
-/** backed = min(wallet, allowance→Aqua). Aqua does the transferFrom, so allowance is to the Aqua contract. */
+/** backed = min(wallet, allowance). Aqua pulls in two modes: Aqua-does-transferFrom (approve Aqua)
+ *  or router-does-transferFrom (approve the SwapVM router). Use the larger of the two allowances so
+ *  we never understate backing (which would overstate phantom depth). */
 export async function readBacking(chain, maker, token) {
   const c = client(chain);
-  let wallet = 0n, allowance = 0n;
+  let wallet = 0n, allowAqua = 0n, allowRouter = 0n;
   try { wallet = await c.readContract({ address: token, abi: ERC20_ABI, functionName: "balanceOf", args: [maker] }); } catch {}
-  try { allowance = await c.readContract({ address: token, abi: ERC20_ABI, functionName: "allowance", args: [maker, AQUA] }); } catch {}
+  try { allowAqua = await c.readContract({ address: token, abi: ERC20_ABI, functionName: "allowance", args: [maker, AQUA] }); } catch {}
+  try { allowRouter = await c.readContract({ address: token, abi: ERC20_ABI, functionName: "allowance", args: [maker, SWAPVM_ROUTER] }); } catch {}
+  const allowance = allowAqua > allowRouter ? allowAqua : allowRouter;
   return { wallet, allowance };
 }
