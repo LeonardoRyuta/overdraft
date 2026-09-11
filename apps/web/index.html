@@ -282,6 +282,8 @@
   .sd-field + .sd-field { margin-top: 20px; }
   .sd-label { display: block; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .sd-label .sub { color: #5f7484; }
+  .sd-cover { margin: 10px 0 0; font-family: var(--mono); font-size: 12px; line-height: 1.45;
+    color: var(--muted); min-height: 16px; }
 
   .sd-select { width: 100%; font-family: var(--sans); font-size: 15px; color: var(--paper);
     background: var(--abyss) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237f93a3' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 14px center;
@@ -610,6 +612,7 @@
         <div class="sd-field">
           <label class="sd-label" for="sdPos">Aqua position <span class="sub">— real, from the coverage snapshot</span></label>
           <select class="sd-select" id="sdPos"></select>
+          <p class="sd-cover" id="sdCover" aria-live="polite"></p>
         </div>
 
         <div class="sd-field">
@@ -997,25 +1000,30 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
 
   // Real positions lifted from public/coverage-ethereum.json (real[]): one well-backed,
   // one partially under-backed, two phantom (incl. the headline $6.0M WETH maker).
+  // `backed`/`ratio` are the (stale) coverage-snapshot values; `committed` is Σ virtual balance
+  // from the same snapshot. Live backing is read on-chain — the snapshot is only a labelled fallback.
   var POS = [
     { maker: "0xf9c6251bb769bd04c9d7eb1599f4e1c5cb3208d3", token: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
-      symbol: "wstETH", decimals: 18, backed: "6812806664872661330", ratio: 1.1902688924763936, priceUsd: 3095.562491594323 },
+      symbol: "wstETH", decimals: 18, backed: "6812806664872661330", committed: "5723754277656028508", ratio: 1.1902688924763936, priceUsd: 3095.562491594323 },
     { maker: "0xbc52b6e3db12a6177c88ffbd423ddef2fc67f50f", token: "0x6b175474e89094c44da98b954eedeac495271d0f",
-      symbol: "DAI", decimals: 18, backed: "196787566546810481678730", ratio: 0.4952933768286908, priceUsd: 0.9999870897422032 },
+      symbol: "DAI", decimals: 18, backed: "196787566546810481678730", committed: "397315158556772400166009", ratio: 0.4952933768286908, priceUsd: 0.9999870897422032 },
     { maker: "0x5c8dac73dc882fa023a17146903faef7f8d33ab7", token: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-      symbol: "WBTC", decimals: 8, backed: "0", ratio: 0, priceUsd: 79317.8049211134 },
+      symbol: "WBTC", decimals: 8, backed: "0", committed: "1090127113", ratio: 0, priceUsd: 79317.8049211134 },
     { maker: "0xc5f0bd61b8fe75ccaa03b20413b27afb5f3e80be", token: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-      symbol: "WETH", decimals: 18, backed: "0", ratio: 0, priceUsd: 2490.7517640779424 }
+      symbol: "WETH", decimals: 18, backed: "0", committed: "2420624866299999965610", ratio: 0, priceUsd: 2490.7517640779424 }
   ];
 
   var posSel = $("sdPos"), payIn = $("sdPay"), recvEl = $("sdRecv"), recvSym = $("sdRecvSym"),
       guardBtn = $("sdGuard"), guardTxt = $("sdGuardTxt"), hintEl = $("sdHint"), runBtn = $("sdRun"),
-      stepsEl = $("sdSteps"), verdictEl = $("sdVerdict"), backingEl = $("sdBacking");
+      stepsEl = $("sdSteps"), verdictEl = $("sdVerdict"), backingEl = $("sdBacking"), coverEl = $("sdCover");
   if (!posSel || !payIn || !runBtn) return;
 
   var guardOn = true;
   var runToken = 0;
   var timers = [];
+  var liveCache = {};        // position index -> { backed:BigInt, block, live } (last live/snapshot read)
+  var hintToken = 0;         // guards out-of-order async hint/cover updates
+  var debounceTimer = null;  // debounces the live re-read while typing
 
   var shortAddr = function (a) { return a.slice(0, 6) + "…" + a.slice(-4); };
 
@@ -1026,10 +1034,6 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
     if (x !== 0 && x < 0.000001) return x.toExponential(2);
     return x.toLocaleString("en-US", { maximumFractionDigits: maxFrac, minimumFractionDigits: 0 });
   }
-  function baseToNum(baseStr, decimals) {
-    try { return Number(BigInt(baseStr)) / Math.pow(10, decimals); }
-    catch (e) { return Number(baseStr) / Math.pow(10, decimals) || 0; }
-  }
   function pad(addr) { return addr.toLowerCase().replace(/^0x/, "").padStart(64, "0"); }
 
   function cur() { return POS[posSel.selectedIndex] || POS[0]; }
@@ -1037,35 +1041,132 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
   function amountOut() { var p = cur(); return p.priceUsd ? payUsd() / p.priceUsd : 0; }
 
   // ---- populate dropdown ----
+  // No coverage % here on purpose: the snapshot ratio is stale/volatile and would contradict the
+  // live guard verdict. Live "Backing now: …" is shown on-card once a position is selected.
   posSel.innerHTML = POS.map(function (p, i) {
-    var cov = (p.ratio == null) ? "n/a" : Math.round(p.ratio * 100) + "%";
-    return '<option value="' + i + '">' + p.symbol + " · coverage " + cov + " · maker " + shortAddr(p.maker) + "</option>";
+    return '<option value="' + i + '">' + p.symbol + " · maker " + shortAddr(p.maker) + "</option>";
   }).join("");
 
   function clearTimers() { timers.forEach(clearTimeout); timers = []; }
 
-  // ---- live "you receive" + threshold hint (snapshot backing, updates as they type) ----
-  function refreshQuote() {
+  // ---- one live-backing read, reused by the hint, the on-card figure AND the Simulate verdict ----
+  // Reads the maker's LIVE backing for one token on-chain:
+  //   min(balanceOf(maker), max(allowance→Aqua, allowance→Router))
+  // Resolves { backed:<BigInt base units>, block:<Number|null>, live:true } on success, or
+  // { backed:<snapshotBacked BigInt>, block:null, live:false } on any failure/timeout. `decimals`
+  // is part of the callable signature for the caller's convenience (backed is returned in base units).
+  function liveBacking(maker, token, decimals, snapshotBacked) {
+    var fallback = { backed: snapshotBacked, block: null, live: false };
+    if (!window.fetch) return Promise.resolve(fallback);
+    var batch = [
+      { jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] },
+      { jsonrpc: "2.0", id: 2, method: "eth_call", params: [{ to: token, data: "0x70a08231" + pad(maker) }, "latest"] },
+      { jsonrpc: "2.0", id: 3, method: "eth_call", params: [{ to: token, data: "0xdd62ed3e" + pad(maker) + pad(AQUA) }, "latest"] },
+      { jsonrpc: "2.0", id: 4, method: "eth_call", params: [{ to: token, data: "0xdd62ed3e" + pad(maker) + pad(ROUTER) }, "latest"] }
+    ];
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 6000);
+    return fetch(RPC, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(batch), signal: ctrl ? ctrl.signal : undefined
+    })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (arr) {
+        if (!Array.isArray(arr)) throw new Error("bad response");
+        var by = {}; arr.forEach(function (x) { by[x.id] = x; });
+        var bal = by[2], aA = by[3], aR = by[4];
+        if (!bal || bal.error || !bal.result) throw new Error("no balanceOf");
+        var balance = BigInt(bal.result);
+        var allowA = (aA && aA.result) ? BigInt(aA.result) : 0n;
+        var allowR = (aR && aR.result) ? BigInt(aR.result) : 0n;
+        var allow = allowA > allowR ? allowA : allowR;
+        var backedBase = balance < allow ? balance : allow;
+        var block = (by[1] && by[1].result) ? parseInt(by[1].result, 16) : null;
+        return { backed: backedBase, block: block, live: true };
+      })
+      .catch(function () { return fallback; })
+      .then(function (res) { clearTimeout(to); return res; });
+  }
+
+  // A backing result -> the SAME label the verdict shows, so hint and verdict never disagree.
+  function backingLabel(res) {
+    return res.live
+      ? (res.block != null ? "(live, block " + res.block.toLocaleString("en-US") + ")" : "(live)")
+      : "(snapshot — RPC unavailable)";
+  }
+  // Live coverage = live backing ÷ snapshot Σ committed (both base units).
+  function coveragePct(p, backedBase) {
+    var committed = 0n;
+    try { committed = BigInt(p.committed); } catch (e) { committed = 0n; }
+    if (committed <= 0n) return null;
+    return (Number(backedBase) / Number(committed)) * 100;
+  }
+  function fmtPct(x) {
+    if (x <= 0) return "0";
+    if (x < 0.1) return "<0.1";
+    if (x < 10) return x.toFixed(1);
+    return Math.round(x).toString();
+  }
+  function backingNum(p, res) { return Number(res.backed) / Math.pow(10, p.decimals); }
+
+  // "You receive" quote — synchronous, updates on every keystroke.
+  function updateReceive() {
     var p = cur();
     recvSym.textContent = p.symbol;
     recvEl.textContent = fmtAmt(amountOut(), p.decimals);
+  }
 
-    var backing = baseToNum(p.backed, p.decimals);
-    var out = amountOut();
+  // On-card live figure: "Backing now: X TOKEN ($Y) · coverage Z% (live, block N)".
+  function renderCover(p, res) {
+    var backing = backingNum(p, res);
+    var pct = coveragePct(p, res.backed);
+    coverEl.textContent = "Backing now: " + fmtAmt(backing, p.decimals) + " " + p.symbol +
+      " ($" + Math.round(backing * (p.priceUsd || 0)).toLocaleString("en-US") + ")" +
+      (pct == null ? "" : " · coverage " + fmtPct(pct) + "%") + " " + backingLabel(res);
+  }
+
+  // Typing hint driven by LIVE backing — matches exactly what Simulate will decide (over = out > backing).
+  // Never asserts "Guard would pass" from snapshot data.
+  function setHint(p, res) {
     hintEl.className = "sd-hint";
     if (payUsd() <= 0) { hintEl.textContent = "Enter an amount to pay."; return; }
-    if (backing <= 0) {
+    var backing = backingNum(p, res);
+    var out = amountOut();
+    var lbl = backingLabel(res);
+    if (!res.live) {
+      hintEl.textContent = "Backing " + lbl + ": " + fmtAmt(backing, p.decimals) + " " + p.symbol +
+        " — can't confirm live backing right now. Simulate reads it on-chain before deciding.";
+    } else if (backing <= 0) {
       hintEl.className = "sd-hint over";
-      hintEl.textContent = "This maker's backing is $0 in the snapshot — any amount exceeds it.";
+      hintEl.textContent = "Backing is 0 " + p.symbol + " " + lbl + " — any amount exceeds it. Guard would block.";
     } else if (out <= backing) {
       hintEl.className = "sd-hint ok";
       hintEl.textContent = "Within backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol +
-        " ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + "). Guard would pass.";
+        " ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + " " + lbl + "). Guard would pass.";
     } else {
       hintEl.className = "sd-hint over";
-      hintEl.textContent = "Exceeds backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol +
+      hintEl.textContent = "Exceeds backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol + " " + lbl +
         ") — guard would block. Threshold ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + ".";
     }
+  }
+
+  // Read live backing for the current position, cache it, then drive the on-card figure + hint.
+  function refreshLive() {
+    var p = cur(), idx = posSel.selectedIndex, mine = ++hintToken;
+    if (liveCache[idx]) {
+      renderCover(p, liveCache[idx]);   // show what we have while refreshing
+      setHint(p, liveCache[idx]);
+    } else {
+      coverEl.textContent = "Reading live backing on-chain…";
+      hintEl.className = "sd-hint";
+      hintEl.textContent = payUsd() > 0 ? "Reading the maker's live backing on-chain…" : "Enter an amount to pay.";
+    }
+    liveBacking(p.maker, p.token, p.decimals, BigInt(p.backed)).then(function (res) {
+      if (mine !== hintToken || posSel.selectedIndex !== idx) return; // superseded / position changed
+      liveCache[idx] = res;
+      renderCover(p, res);
+      setHint(p, res);
+    });
   }
 
   function resetTrace() {
@@ -1076,8 +1177,19 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
     backingEl.textContent = "";
   }
 
-  posSel.addEventListener("change", function () { resetTrace(); refreshQuote(); });
-  payIn.addEventListener("input", function () { refreshQuote(); });
+  posSel.addEventListener("change", function () {
+    resetTrace();
+    updateReceive();
+    refreshLive();               // immediate live read for the newly-selected position
+  });
+  payIn.addEventListener("input", function () {
+    updateReceive();
+    var cached = liveCache[posSel.selectedIndex];
+    if (cached) setHint(cur(), cached);       // responsive: re-check against cached live backing
+    else if (payUsd() <= 0) { hintEl.className = "sd-hint"; hintEl.textContent = "Enter an amount to pay."; }
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(refreshLive, 400);   // debounced live re-read (~400ms)
+  });
 
   guardBtn.addEventListener("click", function () {
     guardOn = !guardOn;
@@ -1147,43 +1259,6 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
     }
   }
 
-  // Fetch live backing; resolves {backing (Number), label} or falls back to snapshot on any error.
-  function readBacking(p) {
-    var fallback = { backing: baseToNum(p.backed, p.decimals), label: "(from latest snapshot)" };
-    if (!window.fetch) return Promise.resolve(fallback);
-    var batch = [
-      { jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] },
-      { jsonrpc: "2.0", id: 2, method: "eth_call", params: [{ to: p.token, data: "0x70a08231" + pad(p.maker) }, "latest"] },
-      { jsonrpc: "2.0", id: 3, method: "eth_call", params: [{ to: p.token, data: "0xdd62ed3e" + pad(p.maker) + pad(AQUA) }, "latest"] },
-      { jsonrpc: "2.0", id: 4, method: "eth_call", params: [{ to: p.token, data: "0xdd62ed3e" + pad(p.maker) + pad(ROUTER) }, "latest"] }
-    ];
-    var ctrl = window.AbortController ? new AbortController() : null;
-    var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 6000);
-    return fetch(RPC, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify(batch), signal: ctrl ? ctrl.signal : undefined
-    })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (arr) {
-        if (!Array.isArray(arr)) throw new Error("bad response");
-        var by = {}; arr.forEach(function (x) { by[x.id] = x; });
-        var bal = by[2], aA = by[3], aR = by[4];
-        if (!bal || bal.error || !bal.result) throw new Error("no balanceOf");
-        var balance = BigInt(bal.result);
-        var allowA = (aA && aA.result) ? BigInt(aA.result) : 0n;
-        var allowR = (aR && aR.result) ? BigInt(aR.result) : 0n;
-        var allow = allowA > allowR ? allowA : allowR;
-        var backedBase = balance < allow ? balance : allow;
-        var block = (by[1] && by[1].result) ? parseInt(by[1].result, 16) : null;
-        return {
-          backing: Number(backedBase) / Math.pow(10, p.decimals),
-          label: block != null ? "(live, block " + block.toLocaleString("en-US") + ")" : "(live)"
-        };
-      })
-      .catch(function () { return fallback; })
-      .then(function (res) { clearTimeout(to); return res; });
-  }
-
   function runTrace(over, guard, p, out, backing, label) {
     var mine = ++runToken;
     clearTimers();
@@ -1241,19 +1316,28 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
   }
 
   runBtn.addEventListener("click", function () {
-    var p = cur();
-    if (payUsd() <= 0) { refreshQuote(); return; }
+    var p = cur(), idx = posSel.selectedIndex;
+    if (payUsd() <= 0) { updateReceive(); hintEl.className = "sd-hint"; hintEl.textContent = "Enter an amount to pay."; return; }
     resetTrace();
     runBtn.disabled = true; runBtn.textContent = "Reading on-chain backing…";
     backingEl.textContent = "Reading the maker's live backing on-chain…";
     var out = amountOut();
-    readBacking(p).then(function (res) {
-      var over = out > res.backing;
-      runTrace(over, guardOn, p, out, res.backing, res.label);
+    liveBacking(p.maker, p.token, p.decimals, BigInt(p.backed)).then(function (res) {
+      liveCache[idx] = res;                     // same read powers the hint + on-card figure
+      hintToken++;                              // supersede any in-flight refreshLive for this read
+      var backing = backingNum(p, res);
+      var over = out > backing;
+      if (posSel.selectedIndex === idx) {       // only touch the card if still this position
+        renderCover(p, res);
+        setHint(p, res);                        // keep the hint consistent with the verdict below
+      }
+      runTrace(over, guardOn, p, out, backing, backingLabel(res));
     });
   });
 
-  refreshQuote();
+  // ---- init ----
+  updateReceive();
+  refreshLive();
 })();
 </script>
 </body>
