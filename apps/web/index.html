@@ -262,6 +262,8 @@
     .compare, .split, .verify-grid { grid-template-columns: 1fr; }
     .beats { grid-template-columns: 1fr; gap: 30px; }
     .cards { grid-template-columns: 1fr 1fr; }
+    .swapcard { grid-template-columns: 1fr; }
+    .swapcard .pane.controls { border-right: 0; border-bottom: 1px solid var(--line); }
   }
   @media (max-width: 560px) {
     body { font-size: 16px; }
@@ -271,6 +273,88 @@
     .step { grid-template-columns: 1fr; gap: 14px; }
     .step .rail { flex-direction: row; }
   }
+
+  /* ---------- TRY IT: GUARDED SWAP ---------- */
+  .swapcard { margin-top: 42px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+              display: grid; grid-template-columns: 0.92fr 1.08fr; overflow: hidden; }
+  .swapcard .pane { padding: 26px 28px; }
+  .swapcard .pane.controls { border-right: 1px solid var(--line); }
+  .sd-field + .sd-field { margin-top: 20px; }
+  .sd-label { display: block; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .sd-label .sub { color: #5f7484; }
+
+  .sd-select { width: 100%; font-family: var(--sans); font-size: 15px; color: var(--paper);
+    background: var(--abyss) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237f93a3' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 14px center;
+    border: 1px solid var(--line); border-radius: 9px; padding: 12px 40px 12px 14px; appearance: none; cursor: pointer; }
+  .sd-select:hover { border-color: var(--backed-dim); }
+
+  .sd-pay { display: flex; align-items: center; background: var(--abyss); border: 1px solid var(--line);
+    border-radius: 9px; padding: 0 14px; }
+  .sd-pay .cur { color: var(--muted); font-family: var(--mono); font-size: 18px; }
+  .sd-pay input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--paper);
+    font-family: var(--mono); font-size: 20px; padding: 12px 6px; -moz-appearance: textfield; }
+  .sd-pay input::-webkit-outer-spin-button, .sd-pay input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .sd-pay input:focus { outline: none; }
+  .sd-pay:focus-within { border-color: var(--backed); }
+
+  .sd-receive { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    background: var(--abyss); border: 1px dashed var(--line); border-radius: 9px; padding: 12px 14px; }
+  .sd-receive .amt { font-family: var(--mono); font-size: 20px; color: var(--paper); word-break: break-all; }
+  .sd-receive .sym { color: var(--muted); font-family: var(--mono); font-size: 14px; flex: none; }
+
+  .sd-toggle { display: inline-flex; align-items: center; gap: 12px; }
+  .sd-switch { position: relative; width: 52px; height: 28px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--abyss); cursor: pointer; padding: 0; flex: none; transition: background 160ms ease, border-color 160ms ease; }
+  .sd-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--muted); transition: transform 160ms ease, background 160ms ease; }
+  .sd-switch[aria-pressed="true"] { background: rgba(63,174,158,.18); border-color: var(--backed-dim); }
+  .sd-switch[aria-pressed="true"]::after { transform: translateX(24px); background: var(--backed); }
+  .sd-toggle .st { font-weight: 600; font-size: 15px; }
+  .sd-toggle .st .on { color: var(--backed); } .sd-toggle .st .off { color: var(--muted); }
+
+  .sd-hint { margin-top: 16px; font-size: 13px; color: var(--muted); font-family: var(--mono);
+    min-height: 20px; line-height: 1.4; }
+  .sd-hint.ok { color: var(--backed); } .sd-hint.over { color: var(--phantom); }
+  .sd-run { margin-top: 22px; width: 100%; }
+  .sd-run[disabled] { opacity: .55; cursor: default; }
+
+  .sd-trace-h { color: var(--muted); font-size: 12px; font-family: var(--mono); letter-spacing: .1em;
+    text-transform: uppercase; margin: 0 0 14px; }
+  .sd-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .sd-step { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; background: var(--abyss);
+    opacity: .32; transition: opacity 220ms ease, border-color 220ms ease, background 220ms ease; }
+  .sd-step.show { opacity: 1; }
+  .sd-step .tick { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
+    display: grid; place-items: center; flex: none; color: var(--muted); }
+  .sd-step .tick svg { width: 13px; height: 13px; }
+  .sd-step .op { font-family: var(--mono); font-size: 14px; color: var(--paper); line-height: 1.3; }
+  .sd-step .op .sub { display: block; color: var(--muted); font-weight: 400; font-size: 11.5px; margin-top: 3px; }
+  .sd-step .stat { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; }
+  .sd-step.pass { border-color: var(--backed-dim); }
+  .sd-step.pass .tick { border-color: var(--backed); background: rgba(63,174,158,.14); color: var(--backed); }
+  .sd-step.pass .stat { color: var(--backed); }
+  .sd-step.fail { border-color: var(--phantom); background: rgba(215,38,61,.07); }
+  .sd-step.fail .tick { border-color: var(--phantom); background: rgba(215,38,61,.16); color: var(--phantom); }
+  .sd-step.fail .stat { color: var(--phantom); }
+  .sd-step.skipped { opacity: .3; border-style: dashed; }
+  .sd-step.skipped .stat { color: #5f7484; }
+
+  .sd-verdict { margin-top: 18px; border-radius: 10px; padding: 15px 18px; font-size: 14.5px; line-height: 1.5;
+    display: none; }
+  .sd-verdict.show { display: block; }
+  .sd-verdict.ok { border: 1px solid var(--backed-dim); background: rgba(63,174,158,.09); color: #cdeee7; }
+  .sd-verdict.bad { border: 1px solid var(--phantom); background: rgba(215,38,61,.09); color: #f2cdd2; }
+  .sd-verdict .vh { font-weight: 600; display: block; margin-bottom: 6px; font-size: 15px; }
+  .sd-verdict.ok .vh { color: var(--backed); }
+  .sd-verdict.bad .vh { color: var(--phantom); }
+  .sd-verdict code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,.06);
+    padding: 1px 5px; border-radius: 4px; word-break: break-word; }
+  .sd-verdict .note { display: block; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .sd-backing { margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 16px; }
+  .sd-honesty { margin-top: 22px; color: var(--muted); font-size: 13.5px; max-width: 82ch;
+    border-left: 2px solid var(--backed-dim); padding-left: 14px; }
+  .sd-honesty b { color: #c2d0d9; font-weight: 500; }
 
   /* ---------- MOTION (single orchestrated moment) ---------- */
   .water, .rule, .backed-band { transition: none; }
@@ -511,6 +595,59 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ============ TRY IT: A GUARDED SWAP ============ -->
+<section class="band" id="try" style="padding-top:0;">
+  <div class="inner">
+    <h2 class="section-h">Try it: a swap through Aqua, guarded</h2>
+    <p class="section-lede measure">Pick a real, live Aqua position, size a swap, and watch the SwapVM execute it instruction by instruction. When a position quotes more than its maker can settle, the <b style="color:var(--phantom);font-weight:600">SolvencyGuard</b> refuses it before any token moves.</p>
+
+    <div class="swapcard">
+      <!-- controls -->
+      <div class="pane controls">
+        <div class="sd-field">
+          <label class="sd-label" for="sdPos">Aqua position <span class="sub">— real, from the coverage snapshot</span></label>
+          <select class="sd-select" id="sdPos"></select>
+        </div>
+
+        <div class="sd-field">
+          <label class="sd-label" for="sdPay">You pay</label>
+          <div class="sd-pay">
+            <span class="cur">$</span>
+            <input id="sdPay" type="number" min="0" step="100" inputmode="decimal" value="2500" aria-describedby="sdHint" />
+          </div>
+        </div>
+
+        <div class="sd-field">
+          <span class="sd-label" id="sdRecvLab">You receive <span class="sub">— honest price quote (pay ÷ token price)</span></span>
+          <div class="sd-receive" aria-labelledby="sdRecvLab">
+            <span class="amt" id="sdRecv">0</span>
+            <span class="sym" id="sdRecvSym">—</span>
+          </div>
+        </div>
+
+        <div class="sd-field sd-toggle">
+          <button type="button" class="sd-switch" id="sdGuard" role="switch" aria-checked="true" aria-pressed="true" aria-label="SolvencyGuard"></button>
+          <span class="st">SolvencyGuard: <span id="sdGuardTxt" class="on">ON</span></span>
+        </div>
+
+        <p class="sd-hint" id="sdHint" aria-live="polite"></p>
+
+        <button type="button" class="btn btn-solid sd-run" id="sdRun">Simulate swap</button>
+      </div>
+
+      <!-- trace + verdict -->
+      <div class="pane">
+        <p class="sd-trace-h">SwapVM instruction trace</p>
+        <ol class="sd-steps" id="sdSteps" aria-live="polite"></ol>
+        <div class="sd-verdict" id="sdVerdict" role="status" aria-live="polite"></div>
+        <p class="sd-backing" id="sdBacking"></p>
+      </div>
+    </div>
+
+    <p class="sd-honesty">Simulation — reads this position's <b>real on-chain backing</b> via a public-node <code style="font-family:var(--mono);font-size:12.5px">eth_call</code>; the SolvencyGuard verdict applies the <b>exact logic of our deployed, fork-tested instruction</b> (opcode <code style="font-family:var(--mono);font-size:12.5px">0x22</code>). No transaction is broadcast.</p>
   </div>
 </section>
 
@@ -846,6 +983,277 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
   });
 
   load("ethereum");
+})();
+
+/* ---------- TRY IT: guarded swap simulator ---------- */
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // On-chain endpoints (read-only). backing = min(balanceOf, max(allowance→Aqua, allowance→Router)).
+  var RPC = "https://ethereum-rpc.publicnode.com";
+  var AQUA = "0x1111113ccf1426a8e30e2bff5e005d929bf6a90a";
+  var ROUTER = "0x111111338c5091e8440b67b168bae16a668ac0de";
+
+  // Real positions lifted from public/coverage-ethereum.json (real[]): one well-backed,
+  // one partially under-backed, two phantom (incl. the headline $6.0M WETH maker).
+  var POS = [
+    { maker: "0xf9c6251bb769bd04c9d7eb1599f4e1c5cb3208d3", token: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+      symbol: "wstETH", decimals: 18, backed: "6812806664872661330", ratio: 1.1902688924763936, priceUsd: 3095.562491594323 },
+    { maker: "0xbc52b6e3db12a6177c88ffbd423ddef2fc67f50f", token: "0x6b175474e89094c44da98b954eedeac495271d0f",
+      symbol: "DAI", decimals: 18, backed: "196787566546810481678730", ratio: 0.4952933768286908, priceUsd: 0.9999870897422032 },
+    { maker: "0x5c8dac73dc882fa023a17146903faef7f8d33ab7", token: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      symbol: "WBTC", decimals: 8, backed: "0", ratio: 0, priceUsd: 79317.8049211134 },
+    { maker: "0xc5f0bd61b8fe75ccaa03b20413b27afb5f3e80be", token: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      symbol: "WETH", decimals: 18, backed: "0", ratio: 0, priceUsd: 2490.7517640779424 }
+  ];
+
+  var posSel = $("sdPos"), payIn = $("sdPay"), recvEl = $("sdRecv"), recvSym = $("sdRecvSym"),
+      guardBtn = $("sdGuard"), guardTxt = $("sdGuardTxt"), hintEl = $("sdHint"), runBtn = $("sdRun"),
+      stepsEl = $("sdSteps"), verdictEl = $("sdVerdict"), backingEl = $("sdBacking");
+  if (!posSel || !payIn || !runBtn) return;
+
+  var guardOn = true;
+  var runToken = 0;
+  var timers = [];
+
+  var shortAddr = function (a) { return a.slice(0, 6) + "…" + a.slice(-4); };
+
+  // Format a token amount (base-unit-aware): up to min(decimals,6) fraction digits, grouped.
+  function fmtAmt(x, decimals) {
+    if (!isFinite(x) || x < 0) return "0";
+    var maxFrac = Math.min(decimals || 6, 6);
+    if (x !== 0 && x < 0.000001) return x.toExponential(2);
+    return x.toLocaleString("en-US", { maximumFractionDigits: maxFrac, minimumFractionDigits: 0 });
+  }
+  function baseToNum(baseStr, decimals) {
+    try { return Number(BigInt(baseStr)) / Math.pow(10, decimals); }
+    catch (e) { return Number(baseStr) / Math.pow(10, decimals) || 0; }
+  }
+  function pad(addr) { return addr.toLowerCase().replace(/^0x/, "").padStart(64, "0"); }
+
+  function cur() { return POS[posSel.selectedIndex] || POS[0]; }
+  function payUsd() { var v = parseFloat(payIn.value); return isFinite(v) && v > 0 ? v : 0; }
+  function amountOut() { var p = cur(); return p.priceUsd ? payUsd() / p.priceUsd : 0; }
+
+  // ---- populate dropdown ----
+  posSel.innerHTML = POS.map(function (p, i) {
+    var cov = (p.ratio == null) ? "n/a" : Math.round(p.ratio * 100) + "%";
+    return '<option value="' + i + '">' + p.symbol + " · coverage " + cov + " · maker " + shortAddr(p.maker) + "</option>";
+  }).join("");
+
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+  // ---- live "you receive" + threshold hint (snapshot backing, updates as they type) ----
+  function refreshQuote() {
+    var p = cur();
+    recvSym.textContent = p.symbol;
+    recvEl.textContent = fmtAmt(amountOut(), p.decimals);
+
+    var backing = baseToNum(p.backed, p.decimals);
+    var out = amountOut();
+    hintEl.className = "sd-hint";
+    if (payUsd() <= 0) { hintEl.textContent = "Enter an amount to pay."; return; }
+    if (backing <= 0) {
+      hintEl.className = "sd-hint over";
+      hintEl.textContent = "This maker's backing is $0 in the snapshot — any amount exceeds it.";
+    } else if (out <= backing) {
+      hintEl.className = "sd-hint ok";
+      hintEl.textContent = "Within backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol +
+        " ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + "). Guard would pass.";
+    } else {
+      hintEl.className = "sd-hint over";
+      hintEl.textContent = "Exceeds backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol +
+        ") — guard would block. Threshold ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + ".";
+    }
+  }
+
+  function resetTrace() {
+    clearTimers();
+    stepsEl.innerHTML = "";
+    verdictEl.className = "sd-verdict";
+    verdictEl.innerHTML = "";
+    backingEl.textContent = "";
+  }
+
+  posSel.addEventListener("change", function () { resetTrace(); refreshQuote(); });
+  payIn.addEventListener("input", function () { refreshQuote(); });
+
+  guardBtn.addEventListener("click", function () {
+    guardOn = !guardOn;
+    guardBtn.setAttribute("aria-checked", guardOn ? "true" : "false");
+    guardBtn.setAttribute("aria-pressed", guardOn ? "true" : "false");
+    guardTxt.textContent = guardOn ? "ON" : "OFF";
+    guardTxt.className = guardOn ? "on" : "off";
+    resetTrace();
+  });
+
+  var TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>';
+  var CROSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  var DOT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg>';
+
+  function buildSteps(over, guard) {
+    var steps = [
+      { op: "XYCSwap", sub: "swap curve · computes amountOut", state: "pass", stat: "computed" },
+      { op: "ProtocolFee", sub: "Aqua protocol fee applied", state: "pass", stat: "applied" }
+    ];
+    if (guard) {
+      steps.push({
+        op: "SolvencyGuard · opcode 0x22",
+        sub: "coverage check · min(wallet, allowance→Aqua)",
+        state: over ? "fail" : "pass",
+        stat: over ? "HALT · InsufficientCoverage" : "coverage OK"
+      });
+    } else {
+      steps.push({
+        op: "Aqua.pull · safeTransferFrom",
+        sub: "settlement · pulls tokenOut from the maker's wallet",
+        state: over ? "fail" : "pass",
+        stat: over ? "revert · SafeTransferFromFailed" : "settled"
+      });
+    }
+    return steps;
+  }
+
+  function renderStep(s, revealed) {
+    var li = document.createElement("li");
+    li.className = "sd-step" + (revealed ? (" show " + s.state) : "");
+    var icon = !revealed ? DOT : (s.state === "fail" ? CROSS : TICK);
+    li.innerHTML =
+      '<span class="tick">' + icon + '</span>' +
+      '<span class="op">' + s.op + '<span class="sub">' + s.sub + '</span></span>' +
+      '<span class="stat">' + (revealed ? s.stat : "queued") + '</span>';
+    return li;
+  }
+
+  function showVerdict(over, guard, p, out, backing, halted) {
+    var outS = fmtAmt(out, p.decimals) + " " + p.symbol;
+    var backS = fmtAmt(backing, p.decimals) + " " + p.symbol;
+    if (!over) {
+      verdictEl.className = "sd-verdict show ok";
+      verdictEl.innerHTML = '<span class="vh">Swap executes</span>' +
+        outS + " pulled from the maker's wallet. Backing covers the quote — the guard never blocks a trade a maker can settle.";
+    } else if (guard) {
+      verdictEl.className = "sd-verdict show bad";
+      verdictEl.innerHTML = '<span class="vh">Reverted — SolvencyGuard</span>' +
+        '<code>InsufficientCoverage(requested ' + outS + ', backed ' + backS + ')</code><br>' +
+        "SolvencyGuard refused the swap <b>before any transfer</b> — you keep your gas.";
+    } else {
+      verdictEl.className = "sd-verdict show bad";
+      verdictEl.innerHTML = '<span class="vh">Quote returns phantom depth</span>' +
+        "Quote returns <code>" + outS + "</code> (phantom). Execution reverts: <code>SafeTransferFromFailed</code> — the maker holds only " +
+        backS + ". You paid gas for nothing." +
+        '<span class="note">This is what happens on Aqua today, without the guard.</span>';
+    }
+  }
+
+  // Fetch live backing; resolves {backing (Number), label} or falls back to snapshot on any error.
+  function readBacking(p) {
+    var fallback = { backing: baseToNum(p.backed, p.decimals), label: "(from latest snapshot)" };
+    if (!window.fetch) return Promise.resolve(fallback);
+    var batch = [
+      { jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] },
+      { jsonrpc: "2.0", id: 2, method: "eth_call", params: [{ to: p.token, data: "0x70a08231" + pad(p.maker) }, "latest"] },
+      { jsonrpc: "2.0", id: 3, method: "eth_call", params: [{ to: p.token, data: "0xdd62ed3e" + pad(p.maker) + pad(AQUA) }, "latest"] },
+      { jsonrpc: "2.0", id: 4, method: "eth_call", params: [{ to: p.token, data: "0xdd62ed3e" + pad(p.maker) + pad(ROUTER) }, "latest"] }
+    ];
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 6000);
+    return fetch(RPC, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(batch), signal: ctrl ? ctrl.signal : undefined
+    })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (arr) {
+        if (!Array.isArray(arr)) throw new Error("bad response");
+        var by = {}; arr.forEach(function (x) { by[x.id] = x; });
+        var bal = by[2], aA = by[3], aR = by[4];
+        if (!bal || bal.error || !bal.result) throw new Error("no balanceOf");
+        var balance = BigInt(bal.result);
+        var allowA = (aA && aA.result) ? BigInt(aA.result) : 0n;
+        var allowR = (aR && aR.result) ? BigInt(aR.result) : 0n;
+        var allow = allowA > allowR ? allowA : allowR;
+        var backedBase = balance < allow ? balance : allow;
+        var block = (by[1] && by[1].result) ? parseInt(by[1].result, 16) : null;
+        return {
+          backing: Number(backedBase) / Math.pow(10, p.decimals),
+          label: block != null ? "(live, block " + block.toLocaleString("en-US") + ")" : "(live)"
+        };
+      })
+      .catch(function () { return fallback; })
+      .then(function (res) { clearTimeout(to); return res; });
+  }
+
+  function runTrace(over, guard, p, out, backing, label) {
+    var mine = ++runToken;
+    clearTimers();
+    var steps = buildSteps(over, guard);
+    // render all queued first
+    stepsEl.innerHTML = "";
+    var nodes = steps.map(function (s) { var n = renderStep(s, false); stepsEl.appendChild(n); return n; });
+
+    backingEl.textContent = "Backing " + label + ": " + fmtAmt(backing, p.decimals) + " " + p.symbol +
+      " ≈ $" + Math.round(backing * (p.priceUsd || 0)).toLocaleString("en-US") + " · min(wallet, allowance→Aqua)";
+
+    function reveal(i) {
+      if (i >= steps.length) {
+        showVerdict(over, guard, p, out, backing, over && guard);
+        runBtn.disabled = false; runBtn.textContent = "Simulate swap";
+        return;
+      }
+      var s = steps[i];
+      nodes[i].className = "sd-step show " + s.state;
+      nodes[i].querySelector(".tick").innerHTML = s.state === "fail" ? CROSS : TICK;
+      nodes[i].querySelector(".stat").textContent = s.stat;
+      if (s.state === "fail") {
+        // halt: mark remaining as skipped, then verdict
+        for (var j = i + 1; j < steps.length; j++) {
+          nodes[j].className = "sd-step show skipped";
+          nodes[j].querySelector(".stat").textContent = "not reached";
+        }
+        timers.push(setTimeout(function () {
+          if (mine !== runToken) return;
+          showVerdict(over, guard, p, out, backing, over && guard);
+          runBtn.disabled = false; runBtn.textContent = "Simulate swap";
+        }, 380));
+        return;
+      }
+      timers.push(setTimeout(function () { if (mine === runToken) reveal(i + 1); }, 420));
+    }
+
+    if (reduce) {
+      steps.forEach(function (s, i) {
+        var stopHere = s.state === "fail";
+        nodes[i].className = "sd-step show " + (i > firstFail(steps) ? "skipped" : s.state);
+        nodes[i].querySelector(".tick").innerHTML = s.state === "fail" ? CROSS : (i > firstFail(steps) ? DOT : TICK);
+        nodes[i].querySelector(".stat").textContent = (i > firstFail(steps)) ? "not reached" : s.stat;
+      });
+      showVerdict(over, guard, p, out, backing, over && guard);
+      runBtn.disabled = false; runBtn.textContent = "Simulate swap";
+    } else {
+      reveal(0);
+    }
+  }
+
+  function firstFail(steps) {
+    for (var i = 0; i < steps.length; i++) if (steps[i].state === "fail") return i;
+    return steps.length; // no fail
+  }
+
+  runBtn.addEventListener("click", function () {
+    var p = cur();
+    if (payUsd() <= 0) { refreshQuote(); return; }
+    resetTrace();
+    runBtn.disabled = true; runBtn.textContent = "Reading on-chain backing…";
+    backingEl.textContent = "Reading the maker's live backing on-chain…";
+    var out = amountOut();
+    readBacking(p).then(function (res) {
+      var over = out > res.backing;
+      runTrace(over, guardOn, p, out, res.backing, res.label);
+    });
+  });
+
+  refreshQuote();
 })();
 </script>
 </body>
