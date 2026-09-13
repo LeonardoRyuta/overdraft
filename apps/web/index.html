@@ -3,645 +3,409 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Overdraft — how much of Aqua's advertised liquidity actually exists</title>
-<meta name="description" content="Overdraft measures the gap between quoted and backed liquidity on 1inch Aqua. On Ethereum, only 6.3% of $25.3M quoted depth is backed — $23.9M is phantom." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<title>Overdraft: is 1inch Aqua's liquidity actually there?</title>
+<meta name="description" content="Aqua lets a wallet quote way more liquidity than it actually holds. Overdraft adds up how much is real, one position at a time, straight from the chain. On Ethereum only 6.3% of the $25.3M quoted is backed; the other $23.9M is phantom. Comes with a SwapVM instruction that stops positions overquoting in the first place." />
 <style>
   :root {
-    --abyss:#071a2c; --panel:#0b2236; --line:#16354f; --paper:#e9eef0;
-    --ink:#0a1420; --backed:#3fae9e; --phantom:#d7263d; --muted:#7f93a3;
-    --backed-dim:#1f5c55; --phantom-dim:#5c1a25;
-    --sans:"Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, monospace;
-    --waterline:#bfe9e2;
+    --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f5; --surface-3:#eceff2;
+    --text:#1b1f24; --text-2:#5b6570; --text-3:#8b949e;
+    --border:#e5e8ec; --border-2:#d5dae0;
+    --link:#2172e5; --link-hover:#155ac0;
+    --good:#1a8f4c; --good-bg:#e7f5ec; --bad:#d92d20; --bad-bg:#fbeae8; --warn:#b7791f; --warn-bg:#fcf3e6;
+    --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --header-h:54px;
   }
-
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body {
-    margin: 0; background: var(--abyss); color: var(--paper);
-    font-family: var(--sans); font-size: 17px; line-height: 1.55;
-    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-    overflow-x: hidden;
-  }
-  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-feature-settings:"tnum" 1; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans);
+    font-size: 14px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--mono); }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-hover); text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 2px; }
+  h1,h2,h3,h4 { margin: 0; font-weight: 600; line-height: 1.25; color: var(--text); }
+  h2 { font-size: 19px; }
+  h3 { font-size: 15px; }
+  p { margin: 0; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 
-  a { color: var(--backed); text-decoration: none; }
-  a:hover { text-decoration: underline; text-underline-offset: 3px; }
-  :focus-visible { outline: 2px solid var(--backed); outline-offset: 3px; border-radius: 2px; }
+  .wrap { width: min(1200px, 94vw); margin: 0 auto; }
+  section { scroll-margin-top: calc(var(--header-h) + 12px); }
+  .sec { padding: 28px 0; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .sec-head h2 { font-size: 18px; }
+  .sec-head .sub { color: var(--text-2); font-size: 13px; }
 
-  h1,h2,h3 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.08; margin: 0; }
-
-  .band { padding: clamp(64px, 9vw, 128px) 0; }
-  .band--paper { background: var(--paper); color: var(--ink); }
-  .band--paper a { color: #146a5e; }
-  .inner { width: min(1120px, 90vw); margin: 0 auto; }
-  .measure { max-width: 68ch; }
-
-  /* ---------- skip link ---------- */
-  .skip { position: absolute; left: -9999px; top: 8px; background: var(--backed); color: var(--ink);
-          padding: 8px 14px; border-radius: 6px; font-weight: 600; z-index: 100; }
+  .skip { position: absolute; left: -9999px; top: 6px; background: var(--text); color: #fff; padding: 8px 14px; border-radius: 5px; z-index: 200; }
   .skip:focus { left: 12px; }
 
-  /* ---------- HERO ---------- */
-  .hero { min-height: 100svh; display: grid; align-items: center; position: relative;
-          padding: 88px 0 56px; }
-  .hero .inner { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(32px, 6vw, 80px);
-                 align-items: center; }
-  .brandmark { display: flex; align-items: baseline; gap: 12px; margin-bottom: 40px; }
-  .brandmark b { font-weight: 700; font-size: 20px; letter-spacing: -0.03em; }
-  .brandmark span { color: var(--muted); font-size: 14px; }
+  /* ---------- header ---------- */
+  .hdr { position: sticky; top: 0; z-index: 100; height: var(--header-h); background: var(--surface);
+    border-bottom: 1px solid var(--border); }
+  .hdr-inner { width: min(1200px, 96vw); margin: 0 auto; height: 100%; display: flex; align-items: center; gap: 20px; }
+  .logo { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
+  .logo:hover { text-decoration: none; }
+  .logo svg { width: 17px; height: 18px; display: block; }
+  .logo b { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .logo span { font-size: 11px; color: var(--text-3); font-weight: 500; border-left: 1px solid var(--border-2); padding-left: 8px; margin-left: 2px; }
+  .nav { display: flex; align-items: center; gap: 2px; margin-left: 8px; overflow-x: auto; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { color: var(--text-2); font-size: 13.5px; font-weight: 500; padding: 6px 10px; border-radius: 5px; white-space: nowrap; }
+  .nav a:hover { color: var(--text); background: var(--surface-2); text-decoration: none; }
+  .nav a.active { color: var(--text); background: var(--surface-2); }
+  .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
+  .ghlink { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-2);
+    border: 1px solid var(--border-2); border-radius: 5px; padding: 6px 11px; }
+  .ghlink:hover { color: var(--text); border-color: var(--text-3); text-decoration: none; }
+  .ghlink svg { width: 15px; height: 15px; }
 
-  .hero h1 { font-size: clamp(38px, 6.4vw, 76px); font-weight: 700; }
-  .hero .lede { color: #cdd9e0; margin: 26px 0 34px; font-size: clamp(17px, 2.1vw, 21px); max-width: 30ch; }
+  /* ---------- generic panel / cards ---------- */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .btn { font-family: var(--sans); font-size: 13.5px; font-weight: 600; padding: 8px 15px; border-radius: 6px;
+    border: 1px solid var(--border-2); background: var(--surface); color: var(--text); cursor: pointer; }
+  .btn:hover { border-color: var(--text-3); background: var(--surface-2); }
+  .btn-primary { background: var(--link); border-color: var(--link); color: #fff; }
+  .btn-primary:hover { background: var(--link-hover); border-color: var(--link-hover); }
+  .btn[disabled] { opacity: .55; cursor: default; }
 
-  .headfig { display: flex; flex-wrap: wrap; gap: 36px 52px; margin-top: 6px; }
-  .headfig .fig { display: block; }
-  .headfig .n { display: block; font-family: var(--mono); font-weight: 600;
-                font-size: clamp(40px, 7vw, 68px); line-height: 1; letter-spacing: -0.03em; }
-  .headfig .n.teal { color: var(--backed); }
-  .headfig .n.red  { color: var(--phantom); }
-  .headfig .cap { display: block; color: var(--muted); font-size: 14.5px; margin-top: 10px; max-width: 22ch; }
-  .headfig .cap b { color: var(--paper); font-weight: 500; }
+  /* pill / tag */
+  /* no decorative status pill; track labels are just plain bold text */
 
-  .heroctas { margin-top: 44px; display: flex; gap: 14px; flex-wrap: wrap; }
-  .btn { font-family: var(--sans); font-weight: 600; font-size: 15.5px; padding: 12px 22px;
-         border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-block; }
-  .btn-solid { background: var(--backed); color: var(--ink); }
-  .btn-solid:hover { background: #55c2b2; text-decoration: none; }
-  .btn-ghost { border-color: var(--line); color: var(--paper); background: transparent; }
-  .btn-ghost:hover { border-color: var(--backed); text-decoration: none; }
+  /* chain toggle */
+  .chain-toggle { display: inline-flex; border: 1px solid var(--border-2); border-radius: 6px; overflow: hidden; }
+  .chain-toggle button { font-family: var(--sans); font-size: 13px; font-weight: 500; border: 0; background: var(--surface);
+    color: var(--text-2); padding: 6px 14px; cursor: pointer; }
+  .chain-toggle button + button { border-left: 1px solid var(--border-2); }
+  .chain-toggle button[aria-selected="true"] { background: var(--link); color: #fff; }
 
-  /* ---------- WATERLINE VISUAL ---------- */
-  .column { position: relative; width: 100%; max-width: 360px; margin: 0 auto;
-            border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-            background: linear-gradient(180deg, #0a2438 0%, #071a2c 100%);
-            box-shadow: 0 30px 60px -30px rgba(0,0,0,.6); }
-  .column .col-inner { position: relative; height: clamp(440px, 64vh, 620px); }
+  /* ---------- OVERVIEW summary ---------- */
+  .over-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 22px 0 14px; }
+  .over-top h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .over-top .net { color: var(--text-2); font-size: 13px; }
+  .summary { display: grid; grid-template-columns: 260px 1fr; gap: 0; }
+  .summary .cov-box { padding: 22px 24px; border-right: 1px solid var(--border); }
+  .cov-num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .cov-num.good { color: var(--good); } .cov-num.warn { color: var(--warn); } .cov-num.bad { color: var(--bad); }
+  .cov-lab { color: var(--text-2); font-size: 12.5px; margin-top: 8px; }
+  .cov-sub { color: var(--text-3); font-size: 12px; margin-top: 3px; }
+  .summary .cov-right { padding: 18px 22px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; }
+  .card .k { color: var(--text-3); font-size: 12px; }
+  .card .v { font-size: 21px; font-weight: 600; margin-top: 3px; }
+  .card .v.good { color: var(--good); } .card .v.bad { color: var(--bad); }
+  .stackbar { display: flex; height: 12px; border-radius: 4px; overflow: hidden; margin-top: 20px; background: var(--surface-2); }
+  .stackbar span { display: block; height: 100%; }
+  .stackbar .s-backed { background: var(--good); } .stackbar .s-phantom { background: var(--bad); }
+  .stack-legend { display: flex; gap: 20px; margin-top: 9px; font-size: 12px; color: var(--text-2); }
+  .stack-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: baseline; }
+  .stack-legend i.good { background: var(--good); } .stack-legend i.bad { background: var(--bad); }
+  .meta { margin: 12px 0 0; color: var(--text-3); font-size: 12px; }
+  .meta b { color: var(--text-2); font-weight: 600; }
 
-  /* quoted region label at very top */
-  .quoted-cap { position: absolute; top: 14px; left: 16px; right: 16px; z-index: 4;
-                display: flex; justify-content: space-between; align-items: baseline; }
-  .quoted-cap .lab { color: #9fb3c2; font-size: 13px; }
-  .quoted-cap .val { color: var(--paper); font-size: 16px; font-weight: 600; }
+  /* methodology / cross-chain row */
+  .over-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .mini h3 { margin-bottom: 10px; }
+  .mini table { width: 100%; }
+  .method { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+  .method p + p { margin-top: 10px; }
+  .method .fx { font-family: var(--mono); font-size: 12.5px; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin: 12px 0; line-height: 1.7; }
+  .method b { color: var(--text); font-weight: 600; }
+  .panel-pad { padding: 18px 20px; }
 
-  /* the water fill (phantom) rises from the bottom */
-  .water { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
-           background:
-             linear-gradient(180deg, rgba(215,38,61,.92) 0%, rgba(140,20,36,.96) 100%);
-           overflow: hidden; }
-  .water::before { /* subtle wave shimmer at the surface */
-    content:""; position: absolute; top: 0; left: -50%; width: 200%; height: 14px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
-  }
-  .water .phantom-label { position: absolute; left: 16px; bottom: 18px; right: 16px; }
-  .water .phantom-label .lab { color: #ffd6dc; font-size: 13px; letter-spacing: .01em; }
-  .water .phantom-label .val { color: #fff; font-family: var(--mono); font-weight: 600; font-size: 26px; display:block; margin-top: 4px;}
-  .water .phantom-label .sub { color: rgba(255,255,255,.72); font-size: 12.5px; display:block; margin-top: 2px; }
-
-  /* the waterline rule + moving label */
-  .rule { position: absolute; left: 0; right: 0; z-index: 5; height: 0; bottom: 0; }
-  .rule .line { position: absolute; left: 0; right: 0; top: -1px; height: 2px;
-                background: var(--waterline); box-shadow: 0 0 12px rgba(191,233,226,.55); }
-  .rule .tag { position: absolute; right: 12px; top: -30px; font-family: var(--mono);
-               font-size: 12.5px; color: var(--waterline); background: rgba(7,26,44,.72);
-               padding: 2px 8px; border-radius: 5px; }
-
-  /* the thin teal sliver of backed depth, floating just above the water */
-  .backed-band { position: absolute; left: 0; right: 0; z-index: 6;
-                 background: linear-gradient(180deg, #57c6b6, #2f8d80);
-                 border-top: 1px solid rgba(255,255,255,.25); }
-  .backed-band .bl { position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
-                     color: #04241f; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-
-  .col-caption { color: var(--muted); font-size: 13px; text-align: center; margin-top: 16px;
-                 max-width: 340px; margin-left: auto; margin-right: auto; }
-
-  /* ---------- THE FINDING (compare) ---------- */
-  .section-h { font-size: clamp(28px, 4vw, 44px); font-weight: 600; margin-bottom: 14px; }
-  .section-lede { color: var(--muted); max-width: 62ch; font-size: 18px; }
-  .band--paper .section-lede { color: #3a4b57; }
-
-  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 44px; }
-  .chaincard { border: 1px solid rgba(10,20,32,.14); border-radius: 12px; padding: 26px 26px 22px;
-               background: #fff; position: relative; }
-  .chaincard h3 { font-size: 21px; display: flex; align-items: baseline; gap: 10px; }
-  .chaincard h3 .cov { font-family: var(--mono); margin-left: auto; font-size: 30px; font-weight: 600; }
-  .chaincard.eth h3 .cov { color: #b21f31; }
-  .chaincard.base h3 .cov { color: #146a5e; }
-  .chaincard .covbar { height: 10px; border-radius: 6px; background: #dfe6e9; margin: 16px 0 24px; overflow: hidden; }
-  .chaincard .covbar > span { display: block; height: 100%; background: var(--backed); }
-  .chaincard.eth .covbar > span { background: linear-gradient(90deg,#3fae9e,#3fae9e); }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
-  .stat .lab { color: #6a7a86; font-size: 13.5px; }
-  .stat .v { font-family: var(--mono); font-size: 24px; font-weight: 600; margin-top: 3px; color: var(--ink); }
-  .stat .v.red { color: #b21f31; }
-  .chaincard .foot { margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(10,20,32,.1);
-                     color: #55656f; font-size: 14px; }
-  .contrast-note { margin-top: 30px; color: #3a4b57; max-width: 66ch; font-size: 16.5px; }
-
-  /* ---------- WHY (three beats) ---------- */
-  .beats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 46px; }
-  .beat h3 { font-size: 20px; margin-bottom: 10px; color: var(--ink); }
-  .beat p { color: #45555f; font-size: 16px; margin: 0; }
-  .beat .kbit { font-family: var(--mono); color: #146a5e; font-size: 14px; display: block; margin-top: 12px; }
-
-  /* ---------- DASHBOARD ---------- */
-  .dash-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 40px; }
-  .dash-head .section-lede { color: var(--muted); }
-  .tabs { display: inline-flex; gap: 6px; padding: 5px; border: 1px solid var(--line);
-          border-radius: 10px; background: var(--panel); }
-  .tabs button { font-family: var(--sans); background: transparent; border: 0; color: var(--muted);
-                 border-radius: 7px; padding: 9px 18px; font-size: 15px; font-weight: 500; cursor: pointer; }
-  .tabs button[aria-selected="true"] { background: var(--abyss); color: var(--paper);
-                 box-shadow: inset 0 0 0 1px var(--line); }
-  .meta { color: var(--muted); font-family: var(--mono); font-size: 13px; margin: 22px 0 0; }
-
-  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 26px 0 40px; }
-  .card { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; background: var(--panel); }
-  .card .k { color: var(--muted); font-size: 13.5px; }
-  .card .v { font-family: var(--mono); font-size: 30px; font-weight: 600; margin-top: 8px; letter-spacing: -0.02em; }
-  .card.cov .v { color: var(--backed); }
-  .card.phantom .v { color: var(--phantom); }
-  .card.phantom { border-color: var(--phantom-dim); }
-  .card.cov { border-color: var(--backed-dim); }
-
-  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-  table { border-collapse: collapse; width: 100%; min-width: 760px; }
-  caption { text-align: left; }
-  th, td { text-align: right; padding: 11px 16px; border-bottom: 1px solid var(--line);
-           white-space: nowrap; font-size: 14px; }
-  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  th { color: var(--muted); font-weight: 500; font-size: 12.5px; position: sticky; top: 0;
-       background: #0c2843; z-index: 2; }
+  /* ---------- tables ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; }
+  .scroll table { min-width: 720px; }
+  th, td { text-align: right; padding: 9px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 13px; }
+  th { color: var(--text-3); font-weight: 600; font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+    background: var(--surface-2); position: sticky; top: 0; z-index: 2; }
   th:first-child, td:first-child, th.l, td.l { text-align: left; }
   tbody tr:last-child td { border-bottom: 0; }
-  .maker a { color: var(--paper); font-family: var(--mono); }
-  .maker a:hover { color: var(--backed); }
-  .bar { display: inline-block; width: 68px; height: 8px; background: #12314a; border-radius: 5px;
-         overflow: hidden; vertical-align: middle; margin-right: 9px; }
-  .bar > span { display: block; height: 100%; }
-  .cov-red { color: var(--phantom); } .cov-amber { color: #e9a13b; } .cov-green { color: var(--backed); }
-  .pill { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
-          padding: 2px 9px; font-family: var(--sans); }
-  .ph-red { color: var(--phantom); }
-  .subhead { font-size: 17px; font-weight: 600; margin: 44px 0 6px; color: var(--paper); }
-  .subhead .hint { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 8px; }
+  tbody tr:hover td { background: var(--surface-2); }
+  td.num, th.num { font-variant-numeric: tabular-nums; }
+  #rows.collapsed tr:nth-child(n+13) { display: none; }
+  .maker a { font-family: var(--mono); font-size: 12.5px; }
+  .cbar { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .cbar .track { width: 54px; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .cbar .track > span { display: block; height: 100%; }
+  .cov-red { color: var(--bad); } .cov-amber { color: var(--warn); } .cov-green { color: var(--good); }
+  .ph-red { color: var(--bad); }
+  .binding { font-size: 11px; color: var(--text-3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .lb-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .lb-note { color: var(--text-3); font-size: 12px; }
 
-  /* ---------- TOOLS PIPELINE ---------- */
-  .pipe { margin-top: 48px; display: grid; gap: 0; }
-  .step { display: grid; grid-template-columns: auto 1fr; gap: 26px; padding: 30px 0; position: relative; }
-  .step + .step { border-top: 1px solid var(--line); }
-  .step .rail { display: flex; flex-direction: column; align-items: center; }
-  .step .dot { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
-               background: var(--panel); display: grid; place-items: center; flex: none; }
-  .step .dot svg { width: 22px; height: 22px; }
-  .step .body h3 { font-size: 22px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  .step .body h3 .role { color: var(--muted); font-family: var(--mono); font-size: 13px; font-weight: 400; }
-  .step .body p { color: #c2d0d9; max-width: 68ch; margin: 12px 0 0; font-size: 16px; }
-  .step .proof { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .proof .prow { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 11px 16px;
-                 font-size: 14px; align-items: center; }
-  .proof .prow + .prow { border-top: 1px solid var(--line); }
-  .proof .prow .lbl { color: var(--muted); }
-  .proof .prow .val { font-family: var(--mono); font-size: 14px; }
-  .proof .prow.pass .val { color: var(--backed); }
-  .proof .prow.fail .val { color: var(--phantom); }
+  /* ---------- build table ---------- */
+  .build-table td { vertical-align: top; white-space: normal; }
+  .build-table td.tool { white-space: nowrap; font-weight: 600; }
+  .build-table td.what { color: var(--text-2); max-width: 420px; }
+  .build-table td.what code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; color: var(--text); }
+  .build-table .trk { display: inline-flex; flex-direction: column; gap: 2px; }
+  .build-table .trk b { font-weight: 600; font-size: 12.5px; }
+  .build-table .proof { font-family: var(--mono); font-size: 12px; }
+  .build-table .proof .ok { color: var(--good); } .build-table .proof .no { color: var(--bad); }
+  .build-table .proof div + div { margin-top: 3px; }
 
-  /* ---------- MCP / SKILL ---------- */
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; align-items: start; }
-  pre { margin: 0; background: #050f19; border: 1px solid rgba(255,255,255,.06); border-radius: 10px;
-        padding: 18px 20px; overflow-x: auto; }
-  code, pre { font-family: var(--mono); font-size: 14px; }
-  pre code { color: #cfe0e8; }
-  .band--paper pre { background: #0c1a24; }
-  .band--paper pre code { color: #cfe0e8; }
-  .cmt { color: var(--muted); }
-  .prompts { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  .prompts li { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--panel); }
-  .prompts .q { color: var(--paper); font-size: 15.5px; }
-  .prompts .t { display: block; margin-top: 7px; color: var(--backed); font-family: var(--mono); font-size: 13px; }
-  .toollist { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
-  .toollist li { font-size: 15.5px; color: #c2d0d9; }
-  .toollist code { color: var(--backed); background: rgba(63,174,158,.08); padding: 2px 7px; border-radius: 5px; }
+  /* architecture flow */
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 12.5px; }
+  .flow .node { border: 1px solid var(--border-2); border-radius: 6px; padding: 8px 12px; background: var(--surface); }
+  .flow .node b { display: block; font-size: 13px; }
+  .flow .node span { color: var(--text-3); font-size: 11px; font-family: var(--mono); }
+  .flow .arr { color: var(--text-3); }
+  .flow .brace { color: var(--text-3); font-size: 11px; }
 
-  .skill-block { border: 1px solid rgba(10,20,32,.14); border-radius: 12px; background: #fff; padding: 28px 30px; margin-top: 36px; }
-  .skill-block h3 { font-size: 20px; color: var(--ink); }
-  .skill-block p { color: #45555f; max-width: 70ch; font-size: 16px; }
-  .skill-block .name { font-family: var(--mono); color: #146a5e; }
-  .triggers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-  .triggers span { font-family: var(--mono); font-size: 13px; color: #45555f; background: #dde6e9;
-                   border-radius: 999px; padding: 4px 12px; }
+  /* mcp */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 6px; align-items: start; }
+  pre { margin: 0; background: #1b1f24; border-radius: 8px; padding: 16px 18px; overflow-x: auto; }
+  pre code { font-family: var(--mono); font-size: 12.5px; color: #d5dae0; line-height: 1.7; }
+  .cmt { color: #6e7781; }
+  .toollist { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .toollist li { font-size: 13px; color: var(--text-2); }
+  .toollist code { font-family: var(--mono); font-size: 12px; color: var(--link); }
+  .prompts { list-style: none; padding: 0; margin: 0; }
+  .prompts li { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .prompts li:last-child { border-bottom: 0; }
+  .prompts .q { color: var(--text); font-size: 13.5px; }
+  .prompts .t { display: block; margin-top: 5px; color: var(--text-3); font-family: var(--mono); font-size: 11.5px; }
+  .skill-line { margin-top: 14px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+  .skill-line code { font-family: var(--mono); font-size: 12px; color: var(--text); }
 
-  /* ---------- ARCHITECTURE ---------- */
-  .arch { margin-top: 44px; }
-  .arch-svg { width: 100%; height: auto; display: block; }
-  .arch-caps { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 18px 30px; }
-  .arch-caps div { font-size: 15px; color: #c2d0d9; }
-  .arch-caps b { color: var(--paper); font-weight: 600; }
-
-  /* ---------- VERIFY / REPO ---------- */
-  .verify-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; margin-top: 36px; align-items: start; }
-  .linkrows { display: grid; gap: 2px; }
-  .linkrow { display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(10,20,32,.12); align-items: baseline; }
-  .linkrow .lk { color: #6a7a86; font-size: 14px; }
-  .linkrow a { font-family: var(--mono); font-size: 13.5px; word-break: break-all; }
-
-  footer { background: var(--ink); color: var(--muted); padding: 40px 0; font-size: 14px; }
-  footer .inner { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: baseline; justify-content: space-between; }
-  footer b { color: var(--paper); font-weight: 600; }
-  footer .formula { font-family: var(--mono); font-size: 13px; }
-
-  /* ---------- RESPONSIVE ---------- */
-  @media (max-width: 900px) {
-    .hero .inner { grid-template-columns: 1fr; }
-    .hero { padding-top: 72px; min-height: auto; }
-    .column { max-width: 320px; order: -1; }
-    .compare, .split, .verify-grid { grid-template-columns: 1fr; }
-    .beats { grid-template-columns: 1fr; gap: 30px; }
-    .cards { grid-template-columns: 1fr 1fr; }
-    .swapcard { grid-template-columns: 1fr; }
-    .swapcard .pane.controls { border-right: 0; border-bottom: 1px solid var(--line); }
-  }
-  @media (max-width: 560px) {
-    body { font-size: 16px; }
-    .grid2 { grid-template-columns: 1fr 1fr; }
-    .cards { grid-template-columns: 1fr 1fr; }
-    .headfig { gap: 26px 34px; }
-    .step { grid-template-columns: 1fr; gap: 14px; }
-    .step .rail { flex-direction: row; }
-  }
-
-  /* ---------- TRY IT: GUARDED SWAP ---------- */
-  .swapcard { margin-top: 42px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
-              display: grid; grid-template-columns: 0.92fr 1.08fr; overflow: hidden; }
-  .swapcard .pane { padding: 26px 28px; }
-  .swapcard .pane.controls { border-right: 1px solid var(--line); }
-  .sd-field + .sd-field { margin-top: 20px; }
-  .sd-label { display: block; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-  .sd-label .sub { color: #5f7484; }
-  .sd-cover { margin: 10px 0 0; font-family: var(--mono); font-size: 12px; line-height: 1.45;
-    color: var(--muted); min-height: 16px; }
-
-  .sd-select { width: 100%; font-family: var(--sans); font-size: 15px; color: var(--paper);
-    background: var(--abyss) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237f93a3' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 14px center;
-    border: 1px solid var(--line); border-radius: 9px; padding: 12px 40px 12px 14px; appearance: none; cursor: pointer; }
-  .sd-select:hover { border-color: var(--backed-dim); }
-
-  .sd-pay { display: flex; align-items: center; background: var(--abyss); border: 1px solid var(--line);
-    border-radius: 9px; padding: 0 14px; }
-  .sd-pay .cur { color: var(--muted); font-family: var(--mono); font-size: 18px; }
-  .sd-pay input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--paper);
-    font-family: var(--mono); font-size: 20px; padding: 12px 6px; -moz-appearance: textfield; }
+  /* ---------- demo ---------- */
+  .swap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 0; }
+  .swap .pane { padding: 20px 22px; }
+  .swap .pane.controls { border-right: 1px solid var(--border); }
+  .sd-field + .sd-field { margin-top: 16px; }
+  .sd-label { display: block; color: var(--text-2); font-size: 12.5px; font-weight: 600; margin: 0 0 6px; }
+  .sd-label .sub { color: var(--text-3); font-weight: 400; }
+  .sd-cover { margin: 8px 0 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.45; color: var(--text-2); min-height: 15px; }
+  .sd-select, .sd-pay, .sd-receive { width: 100%; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); }
+  .sd-select { font-family: var(--sans); font-size: 14px; color: var(--text); padding: 9px 34px 9px 12px; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 11px center; }
+  .sd-pay { display: flex; align-items: center; padding: 0 12px; }
+  .sd-pay .cur { color: var(--text-3); font-family: var(--mono); font-size: 15px; }
+  .sd-pay input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); font-family: var(--mono); font-size: 16px; padding: 9px 6px; -moz-appearance: textfield; }
   .sd-pay input::-webkit-outer-spin-button, .sd-pay input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .sd-pay input:focus { outline: none; }
-  .sd-pay:focus-within { border-color: var(--backed); }
-
-  .sd-receive { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    background: var(--abyss); border: 1px dashed var(--line); border-radius: 9px; padding: 12px 14px; }
-  .sd-receive .amt { font-family: var(--mono); font-size: 20px; color: var(--paper); word-break: break-all; }
-  .sd-receive .sym { color: var(--muted); font-family: var(--mono); font-size: 14px; flex: none; }
-
-  .sd-toggle { display: inline-flex; align-items: center; gap: 12px; }
-  .sd-switch { position: relative; width: 52px; height: 28px; border-radius: 999px; border: 1px solid var(--line);
-    background: var(--abyss); cursor: pointer; padding: 0; flex: none; transition: background 160ms ease, border-color 160ms ease; }
-  .sd-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px;
-    border-radius: 50%; background: var(--muted); transition: transform 160ms ease, background 160ms ease; }
-  .sd-switch[aria-pressed="true"] { background: rgba(63,174,158,.18); border-color: var(--backed-dim); }
-  .sd-switch[aria-pressed="true"]::after { transform: translateX(24px); background: var(--backed); }
-  .sd-toggle .st { font-weight: 600; font-size: 15px; }
-  .sd-toggle .st .on { color: var(--backed); } .sd-toggle .st .off { color: var(--muted); }
-
-  .sd-hint { margin-top: 16px; font-size: 13px; color: var(--muted); font-family: var(--mono);
-    min-height: 20px; line-height: 1.4; }
-  .sd-hint.ok { color: var(--backed); } .sd-hint.over { color: var(--phantom); }
-  .sd-run { margin-top: 22px; width: 100%; }
-  .sd-run[disabled] { opacity: .55; cursor: default; }
-
-  .sd-trace-h { color: var(--muted); font-size: 12px; font-family: var(--mono); letter-spacing: .1em;
-    text-transform: uppercase; margin: 0 0 14px; }
-  .sd-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-  .sd-step { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
-    border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; background: var(--abyss);
-    opacity: .32; transition: opacity 220ms ease, border-color 220ms ease, background 220ms ease; }
+  .sd-pay:focus-within, .sd-select:focus { border-color: var(--link); }
+  .sd-receive { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-style: dashed; padding: 9px 12px; }
+  .sd-receive .amt { font-family: var(--mono); font-size: 16px; word-break: break-all; }
+  .sd-receive .sym { color: var(--text-3); font-family: var(--mono); font-size: 12px; flex: none; }
+  .sd-toggle { display: flex; align-items: center; gap: 10px; }
+  .sd-switch { position: relative; width: 46px; height: 25px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface-2); cursor: pointer; padding: 0; flex: none; transition: background .15s; }
+  .sd-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%; background: var(--text-3); transition: transform .15s, background .15s; }
+  .sd-switch[aria-pressed="true"] { background: var(--good-bg); border-color: #bfe3cc; }
+  .sd-switch[aria-pressed="true"]::after { transform: translateX(21px); background: var(--good); }
+  .sd-toggle .st { font-size: 13.5px; font-weight: 600; }
+  .sd-toggle .st .on { color: var(--good); } .sd-toggle .st .off { color: var(--text-3); }
+  .sd-hint { margin-top: 14px; font-size: 12px; color: var(--text-2); font-family: var(--mono); min-height: 18px; line-height: 1.45; }
+  .sd-hint.ok { color: var(--good); } .sd-hint.over { color: var(--bad); }
+  .sd-run { margin-top: 18px; width: 100%; }
+  .sd-trace-h { color: var(--text-3); font-size: 11px; font-family: var(--mono); letter-spacing: 0.05em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .sd-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .sd-step { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: var(--surface); opacity: .45; transition: opacity .2s, border-color .2s, background .2s; }
   .sd-step.show { opacity: 1; }
-  .sd-step .tick { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
-    display: grid; place-items: center; flex: none; color: var(--muted); }
-  .sd-step .tick svg { width: 13px; height: 13px; }
-  .sd-step .op { font-family: var(--mono); font-size: 14px; color: var(--paper); line-height: 1.3; }
-  .sd-step .op .sub { display: block; color: var(--muted); font-weight: 400; font-size: 11.5px; margin-top: 3px; }
-  .sd-step .stat { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; }
-  .sd-step.pass { border-color: var(--backed-dim); }
-  .sd-step.pass .tick { border-color: var(--backed); background: rgba(63,174,158,.14); color: var(--backed); }
-  .sd-step.pass .stat { color: var(--backed); }
-  .sd-step.fail { border-color: var(--phantom); background: rgba(215,38,61,.07); }
-  .sd-step.fail .tick { border-color: var(--phantom); background: rgba(215,38,61,.16); color: var(--phantom); }
-  .sd-step.fail .stat { color: var(--phantom); }
-  .sd-step.skipped { opacity: .3; border-style: dashed; }
-  .sd-step.skipped .stat { color: #5f7484; }
-
-  .sd-verdict { margin-top: 18px; border-radius: 10px; padding: 15px 18px; font-size: 14.5px; line-height: 1.5;
-    display: none; }
+  .sd-step .tick { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-2); display: grid; place-items: center; flex: none; color: var(--text-3); }
+  .sd-step .tick svg { width: 12px; height: 12px; }
+  .sd-step .op { font-family: var(--mono); font-size: 12.5px; color: var(--text); line-height: 1.3; }
+  .sd-step .op .sub { display: block; color: var(--text-3); font-size: 11px; margin-top: 2px; }
+  .sd-step .stat { font-family: var(--mono); font-size: 11px; color: var(--text-3); text-align: right; }
+  .sd-step.pass { border-color: #bfe3cc; }
+  .sd-step.pass .tick { border-color: var(--good); background: var(--good-bg); color: var(--good); }
+  .sd-step.pass .stat { color: var(--good); }
+  .sd-step.fail { border-color: #f2c7c2; background: var(--bad-bg); }
+  .sd-step.fail .tick { border-color: var(--bad); color: var(--bad); }
+  .sd-step.fail .stat { color: var(--bad); }
+  .sd-step.skipped { opacity: .4; border-style: dashed; }
+  .sd-step.skipped .stat { color: var(--text-3); }
+  .sd-verdict { margin-top: 14px; border-radius: 6px; padding: 13px 15px; font-size: 13px; line-height: 1.5; display: none; }
   .sd-verdict.show { display: block; }
-  .sd-verdict.ok { border: 1px solid var(--backed-dim); background: rgba(63,174,158,.09); color: #cdeee7; }
-  .sd-verdict.bad { border: 1px solid var(--phantom); background: rgba(215,38,61,.09); color: #f2cdd2; }
-  .sd-verdict .vh { font-weight: 600; display: block; margin-bottom: 6px; font-size: 15px; }
-  .sd-verdict.ok .vh { color: var(--backed); }
-  .sd-verdict.bad .vh { color: var(--phantom); }
-  .sd-verdict code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,.06);
-    padding: 1px 5px; border-radius: 4px; word-break: break-word; }
-  .sd-verdict .note { display: block; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
-  .sd-backing { margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 16px; }
-  .sd-honesty { margin-top: 22px; color: var(--muted); font-size: 13.5px; max-width: 82ch;
-    border-left: 2px solid var(--backed-dim); padding-left: 14px; }
-  .sd-honesty b { color: #c2d0d9; font-weight: 500; }
+  .sd-verdict.ok { border: 1px solid #bfe3cc; background: var(--good-bg); }
+  .sd-verdict.bad { border: 1px solid #f2c7c2; background: var(--bad-bg); }
+  .sd-verdict .vh { font-weight: 700; display: block; margin-bottom: 5px; font-size: 13.5px; }
+  .sd-verdict.ok .vh { color: var(--good); } .sd-verdict.bad .vh { color: var(--bad); }
+  .sd-verdict code { font-family: var(--mono); font-size: 11.5px; background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 3px; word-break: break-word; }
+  .sd-verdict .note { display: block; margin-top: 6px; color: var(--text-3); font-size: 11.5px; }
+  .sd-backing { margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--text-3); min-height: 15px; }
+  .sd-honesty { margin-top: 16px; color: var(--text-2); font-size: 12.5px; line-height: 1.55; }
+  .sd-honesty b { color: var(--text); font-weight: 600; }
+  .sd-honesty code { font-family: var(--mono); font-size: 11.5px; }
 
-  /* ---------- MOTION (single orchestrated moment) ---------- */
-  .water, .rule, .backed-band { transition: none; }
-  .js-anim .water { height: 0; }
-  .js-anim .rule { bottom: 0; }
-  .js-anim .backed-band { bottom: 0; height: 0; opacity: 0; }
-  @media (prefers-reduced-motion: no-preference) {
-    .js-anim .water { transition: height 1600ms cubic-bezier(.22,.61,.36,1); }
-    .js-anim .rule { transition: bottom 1600ms cubic-bezier(.22,.61,.36,1); }
-    .js-anim .backed-band { transition: bottom 1600ms cubic-bezier(.22,.61,.36,1), height 900ms ease 600ms, opacity 700ms ease 700ms; }
+  /* verify */
+  .verify-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; align-items: start; }
+  .linkrow { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); align-items: baseline; }
+  .linkrow:first-child { padding-top: 0; }
+  .linkrow:last-child { border-bottom: 0; }
+  .linkrow .lk { color: var(--text-3); font-size: 12.5px; }
+  .linkrow a { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+
+  /* footer */
+  footer { border-top: 1px solid var(--border); margin-top: 20px; padding: 22px 0 40px; color: var(--text-3); font-size: 12px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer .fx { font-family: var(--mono); }
+
+  /* responsive */
+  @media (max-width: 900px) {
+    .summary { grid-template-columns: 1fr; }
+    .summary .cov-box { border-right: 0; border-bottom: 1px solid var(--border); }
+    .over-grid, .split, .verify-grid, .swap { grid-template-columns: 1fr; }
+    .swap .pane.controls { border-right: 0; border-bottom: 1px solid var(--border); }
+    .build-table td.what { max-width: none; }
+  }
+  @media (max-width: 560px) {
+    .cards { grid-template-columns: 1fr 1fr; }
+    .ghlink span { display: none; }
   }
 </style>
 </head>
 <body>
-<a class="skip" href="#dashboard">Skip to live dashboard</a>
+<a class="skip" href="#positions">Skip to the positions table</a>
 
-<!-- ============ HERO ============ -->
-<header class="band hero">
-  <div class="inner">
-    <div>
-      <div class="brandmark">
-        <b>Overdraft</b>
-        <span>1inch Aqua solvency · ETHOnline 2026</span>
-      </div>
-      <h1>Advertised depth isn't the same as real depth.</h1>
-      <p class="lede">On 1inch Aqua, one wallet can quote liquidity many times over. Overdraft measures how much of it is actually backed.</p>
-
-      <div class="headfig">
-        <span class="fig">
-          <span class="n teal num">6.3%</span>
-          <span class="cap">of Ethereum's <b>$25.3M</b> quoted Aqua depth is actually backed on-chain</span>
-        </span>
-        <span class="fig">
-          <span class="n red num">$23.9M</span>
-          <span class="cap"><b>phantom</b> depth: quoted liquidity no maker's wallet can honour</span>
-        </span>
-      </div>
-
-      <div class="heroctas">
-        <a class="btn btn-solid" href="#dashboard">See the live leaderboard</a>
-        <a class="btn btn-ghost" href="https://github.com/LeonardoRyuta/overdraft" target="_blank" rel="noopener">Read the code</a>
-      </div>
-    </div>
-
-    <!-- waterline visual -->
-    <div>
-      <figure class="column" aria-label="Waterline: only a 6.3% sliver of the $25.3M quoted Ethereum depth floats above the line as backed; 93.7% is submerged phantom." style="margin:0;">
-        <div class="col-inner" id="colInner">
-          <div class="quoted-cap">
-            <span class="lab">Quoted depth</span>
-            <span class="val num">$25.3M</span>
-          </div>
-          <div class="water" id="water">
-            <div class="phantom-label">
-              <span class="lab">Below the line, phantom depth</span>
-              <span class="val num">$23.9M</span>
-              <span class="sub num">93.7% of quoted depth</span>
-            </div>
-          </div>
-          <div class="backed-band" id="backedBand">
-            <span class="bl num">Backed · $1.6M</span>
-          </div>
-          <div class="rule" id="rule">
-            <div class="line"></div>
-            <div class="tag num">waterline · 6.3%</div>
-          </div>
-        </div>
-      </figure>
-      <p class="col-caption">The load line. What floats is what a maker can settle; what's submerged is quoted but unbacked.</p>
+<!-- ---------- header ---------- -->
+<header class="hdr">
+  <div class="hdr-inner">
+    <a class="logo" href="#top" aria-label="Overdraft home">
+      <svg viewBox="0 0 14 18" aria-hidden="true"><rect x="0" y="0" width="14" height="4" rx="1" fill="#1a8f4c"/><rect x="0" y="5" width="14" height="13" rx="1" fill="#d92d20"/></svg>
+      <b>Overdraft</b>
+      <span>Aqua solvency</span>
+    </a>
+    <nav class="nav" id="navLinks" aria-label="Primary">
+      <a href="#overview">Overview</a>
+      <a href="#positions">Positions</a>
+      <a href="#demo">Guard demo</a>
+      <a href="#build">What we built</a>
+      <a href="#verify">Verify</a>
+    </nav>
+    <div class="hdr-right">
+      <a class="ghlink" href="https://github.com/LeonardoRyuta/overdraft" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.85 9.73.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.36 9.36 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>
+        <span>GitHub</span>
+      </a>
     </div>
   </div>
 </header>
 
-<!-- ============ THE FINDING ============ -->
-<section class="band band--paper" id="finding">
-  <div class="inner">
-    <h2 class="section-h">The finding</h2>
-    <p class="section-lede">Every live position on each chain, enumerated from The Graph, with its backing read live on-chain. Two networks, one schema — and the same protocol tells a very different story on each.</p>
+<main id="top">
+<div class="wrap">
 
-    <div class="compare">
-      <div class="chaincard eth">
-        <h3>Ethereum <span class="cov num">6.3%</span></h3>
-        <div class="covbar"><span style="width:6.3%"></span></div>
-        <div class="grid2">
-          <div class="stat"><div class="lab">Quoted depth</div><div class="v num">$25.3M</div></div>
-          <div class="stat"><div class="lab">Backed depth</div><div class="v num">$1.6M</div></div>
-          <div class="stat"><div class="lab">Phantom</div><div class="v num red">$23.9M</div></div>
-          <div class="stat"><div class="lab">Active positions</div><div class="v num">1,485</div></div>
-        </div>
-        <div class="foot">1,046 positions under-backed · 11 degenerate (excluded). The largest single position commits 2,420 WETH + 4.44M USDC, approves Aqua at max, and holds $0.</div>
-      </div>
-
-      <div class="chaincard base">
-        <h3>Base <span class="cov num">51.7%</span></h3>
-        <div class="covbar"><span style="width:51.7%"></span></div>
-        <div class="grid2">
-          <div class="stat"><div class="lab">Quoted depth</div><div class="v num">$88K</div></div>
-          <div class="stat"><div class="lab">Backed depth</div><div class="v num">$45K</div></div>
-          <div class="stat"><div class="lab">Phantom</div><div class="v num red">$71K</div></div>
-          <div class="stat"><div class="lab">Active positions</div><div class="v num">134</div></div>
-        </div>
-        <div class="foot">75 positions under-backed. Base's count independently matches a keyless Blockscout full-sweep — two enumeration paths agree.</div>
-      </div>
-    </div>
-
-    <p class="contrast-note">Coverage varies sharply by chain: Base's makers are far better funded than Ethereum's. That's the point of measuring per chain, per maker, live — a single global number would hide it. <a href="#dashboard">Open the live dashboard</a> to walk every position, worst first.</p>
-  </div>
-</section>
-
-<!-- ============ WHY THIS EXISTS ============ -->
-<section class="band band--paper" id="why" style="padding-top:0;">
-  <div class="inner">
-    <h2 class="section-h">Why this gap exists</h2>
-    <p class="section-lede">Aqua's design makes phantom depth possible, its immutability makes it stick, and until now nobody was computing the ratio that reveals it.</p>
-
-    <div class="beats">
-      <div class="beat">
-        <h3>Virtual balances</h3>
-        <p>Aqua is a registry, not a pool. Tokens stay in the maker's wallet; the contract stores allowance records. So $100k of real balance can quote $300k of depth across many positions. That's the feature — and the loophole.</p>
-      </div>
-      <div class="beat">
-        <h3>Immutability</h3>
-        <p>Aqua strategies are immutable once shipped. A misconfigured or under-backed position can't be edited — it can only be docked or left running, advertising depth it can't deliver.</p>
-      </div>
-      <div class="beat">
-        <h3>Nobody computed it</h3>
-        <p>Quoted depth is published; backed depth is not. The ratio between them is a position's real solvency. Aqua's eight audits cover the contracts — not whether a maker's wallet can honour what its positions advertise.</p>
-        <span class="kbit">coverage = min(wallet, allowance→Aqua) / Σ committed</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ LIVE DASHBOARD ============ -->
-<section class="band" id="dashboard">
-  <div class="inner">
-    <div class="dash-head">
+  <!-- ---------- OVERVIEW ---------- -->
+  <section id="overview">
+    <div class="over-top">
       <div>
-        <h2 class="section-h">Live coverage leaderboard</h2>
-        <p class="section-lede measure">Loaded from committed subgraph snapshots. Switch chains; the table lists every real position worst-coverage first.</p>
+        <h1>1inch Aqua solvency</h1>
+        <p class="net">Aqua lets one wallet quote the same liquidity over and over, so the depth you see isn't always depth you can trade. This adds up how much is actually there, one position at a time.</p>
       </div>
-      <div class="tabs" id="tabs" role="tablist" aria-label="Select chain">
+      <div class="chain-toggle" id="tabs" role="tablist" aria-label="Select chain">
         <button role="tab" id="tab-ethereum" aria-controls="dashpanel" aria-selected="true" data-chain="ethereum">Ethereum</button>
         <button role="tab" id="tab-base" aria-controls="dashpanel" aria-selected="false" data-chain="base">Base</button>
       </div>
     </div>
 
+    <div class="panel summary" id="dashpanel" role="tabpanel" aria-labelledby="tab-ethereum">
+      <div class="cov-box">
+        <div class="cov-num" id="covHeadline">…</div>
+        <div class="cov-lab">of the quoted depth is actually backed</div>
+        <div class="cov-sub" id="covSub"></div>
+      </div>
+      <div class="cov-right">
+        <div class="cards" id="cards"></div>
+        <div class="stackbar" id="covbar"><span class="s-backed" style="width:0"></span><span class="s-phantom" style="width:100%"></span></div>
+        <div class="stack-legend" id="covlegend"></div>
+      </div>
+    </div>
     <p class="meta" id="meta">Loading…</p>
 
-    <div id="dashpanel" role="tabpanel" aria-labelledby="tab-ethereum">
-      <div class="cards" id="cards"></div>
-
-      <h3 class="subhead" id="lbh">Every position, worst coverage first<span class="hint" id="lbhint"></span></h3>
-      <div class="scroll">
-        <table>
-          <caption class="sr-only" style="position:absolute;left:-9999px;">Per-position coverage, sorted worst first</caption>
-          <thead><tr>
-            <th class="l" scope="col">Maker</th>
-            <th class="l" scope="col">Token</th>
-            <th class="num" scope="col">Coverage</th>
-            <th class="num" scope="col">Quoted</th>
-            <th class="num" scope="col">Backed</th>
-            <th class="num" scope="col">Phantom</th>
-            <th class="l" scope="col">Binding</th>
-          </tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-
-      <h3 class="subhead" id="degh" style="display:none">Degenerate positions<span class="hint">virtual balance exceeds the token's entire supply — excluded from the headline</span></h3>
-      <div class="scroll" id="degwrap" style="display:none">
-        <table>
-          <thead><tr><th class="l" scope="col">Maker</th><th class="l" scope="col">Token</th><th class="l" scope="col">Note</th></tr></thead>
-          <tbody id="deg"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ HOW IT WORKS — FOUR TOOLS ============ -->
-<section class="band" id="how" style="padding-top:0;">
-  <div class="inner">
-    <h2 class="section-h">How it works</h2>
-    <p class="section-lede measure">Four tools, run in order: measure the gap, verify it executes as quoted, ship the instruction that refuses to overquote, and serve it all over live data.</p>
-
-    <div class="pipe">
-      <!-- Measure -->
-      <div class="step">
-        <div class="rail">
-          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><path d="M3 12h4l2 5 3-12 2 9 2-4h4"/></svg></span>
-        </div>
-        <div class="body">
-          <h3>Measure <span class="role">coverage engine</span></h3>
-          <p>Enumerate every active position from The Graph — one schema deployed per network — then read each maker's real backing live on-chain: <code>min(balanceOf, allowance→Aqua)</code> against summed virtual balances. USD priced via DefiLlama; positions whose commitment exceeds a token's total supply are flagged degenerate and excluded from the headline. Sampled top-15 positions matched on-chain <code>rawBalances</code> 15/15.</p>
-        </div>
-      </div>
-
-      <!-- Verify -->
-      <div class="step">
-        <div class="rail">
-          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><path d="M20 6L9 17l-5-5"/></svg></span>
-        </div>
-        <div class="body">
-          <h3>Verify <span class="role">the Honesty Probe, mainnet fork</span></h3>
-          <p>Take a real, live wstETH/1INCH position and prove two things on a Foundry fork. First, quote equals execution to the wei when backing exists. Then, ask the quote for depth the maker can't cover — it happily returns 15,818 1INCH against a maker holding ~11,298 — and watch the swap revert at settlement.</p>
-          <div class="proof">
-            <div class="prow pass"><span class="lbl">Quote vs. executed swap, when backed</span><span class="val">exact match, 0 wei diff</span></div>
-            <div class="prow fail"><span class="lbl">Oversized quote: 15,818 1INCH vs. ~11,298 held</span><span class="val">reverts SafeTransferFromFailed</span></div>
+    <div class="over-grid">
+      <div class="panel mini">
+        <div class="panel-pad">
+          <h3>Coverage by chain</h3>
+          <div style="overflow-x:auto;margin-top:2px;">
+            <table>
+              <thead><tr><th class="l">Chain</th><th class="num">Coverage</th><th class="num">Quoted</th><th class="num">Backed</th><th class="num">Phantom</th><th class="num">Positions</th></tr></thead>
+              <tbody>
+                <tr><td class="l">Ethereum</td><td class="num cov-red">6.3%</td><td class="num">$25.3M</td><td class="num">$1.6M</td><td class="num ph-red">$23.9M</td><td class="num">1,485</td></tr>
+                <tr><td class="l">Base</td><td class="num cov-amber">51.7%</td><td class="num">$88K</td><td class="num">$45K</td><td class="num ph-red">$71K</td><td class="num">134</td></tr>
+              </tbody>
+            </table>
           </div>
+          <p class="lb-note" style="margin-top:10px;">Base's makers keep their wallets a lot healthier than Ethereum's, which is exactly why one global number would be misleading. You have to look chain by chain. (We also cross-checked Base's count against a keyless Blockscout sweep and it lined up.)</p>
         </div>
       </div>
-
-      <!-- Fix -->
-      <div class="step">
-        <div class="rail">
-          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6l2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6l2.1-2.1"/><circle cx="12" cy="12" r="3.4"/></svg></span>
-        </div>
-        <div class="body">
-          <h3>Fix <span class="role">SolvencyGuard, a SwapVM instruction</span></h3>
-          <p>A custom SwapVM instruction appended to a maker's program. Unguarded, a position quotes 90,909 WETH backed by 5 WETH — an 18,181× overcommit. With the one-byte guard appended, the same quote reverts <code>InsufficientCoverage</code>, naming exactly what's missing — refused at quote time, not at settlement. Backed makers are never blocked; only the overcommit is.</p>
-          <div class="proof">
-            <div class="prow fail"><span class="lbl">Unguarded quote (5 WETH backing)</span><span class="val">90,909 WETH · 18,181× phantom</span></div>
-            <div class="prow pass"><span class="lbl">Guarded quote, same backing</span><span class="val">reverts InsufficientCoverage</span></div>
-            <div class="prow pass"><span class="lbl">Fork test suite</span><span class="val">4 / 4 pass</span></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Query -->
-      <div class="step">
-        <div class="rail">
-          <span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#3fae9e" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
-        </div>
-        <div class="body">
-          <h3>Query <span class="role">MCP server + agent SKILL</span></h3>
-          <p>The same coverage data behind an MCP server, so any agent can ask about Aqua solvency in plain language over live Graph data — network totals, worst offenders, degenerate positions, or one maker's per-token coverage. Enumeration is load-bearing on The Graph; the backed side is always read live on-chain.</p>
+      <div class="panel mini">
+        <div class="panel-pad method">
+          <h3>How coverage is computed</h3>
+          <div class="fx">coverage = min(wallet, allowance→Aqua) / Σ virtual committed<br>phantom&nbsp; = max(0, committed − backed)</div>
+          <p>Aqua keeps a maker's tokens in their own wallet instead of a shared pool. Neat idea, but it means one balance can prop up a bunch of positions at once, so a position can advertise far more than the maker could ever pay out. And once a position ships you can't edit it, so a broken one just keeps quoting.</p>
+          <p>To be clear, this isn't a bug in Aqua (it's been through eight audits). Most of these positions just hold <b>zero</b> of what they promised. Nobody had bothered to add the gap up, so we did.</p>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ============ TRY IT: A GUARDED SWAP ============ -->
-<section class="band" id="try" style="padding-top:0;">
-  <div class="inner">
-    <h2 class="section-h">Try it: a swap through Aqua, guarded</h2>
-    <p class="section-lede measure">Pick a real, live Aqua position, size a swap, and watch the SwapVM execute it instruction by instruction. When a position quotes more than its maker can settle, the <b style="color:var(--phantom);font-weight:600">SolvencyGuard</b> refuses it before any token moves.</p>
+  <!-- ---------- POSITIONS ---------- -->
+  <section id="positions" class="sec">
+    <div class="sec-head">
+      <h2>Positions</h2>
+      <span class="sub" id="lbhint">worst coverage first</span>
+    </div>
+    <div class="scroll">
+      <table>
+        <caption style="position:absolute;left:-9999px;">Per-position coverage, worst first</caption>
+        <thead><tr>
+          <th class="l" scope="col">Maker</th>
+          <th class="l" scope="col">Token</th>
+          <th class="num" scope="col">Coverage</th>
+          <th class="num" scope="col">Quoted</th>
+          <th class="num" scope="col">Backed</th>
+          <th class="num" scope="col">Phantom</th>
+          <th class="l" scope="col">Binding</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="lb-bar">
+      <button type="button" class="btn" id="lbToggle" aria-expanded="false" style="display:none">Show all positions</button>
+      <span class="lb-note">Maker links open the block explorer. Coverage = backed ÷ committed.</span>
+    </div>
 
-    <div class="swapcard">
-      <!-- controls -->
+    <h3 id="degh" style="display:none;margin:26px 0 10px;">Degenerate positions <span class="lb-note" style="font-weight:400;">(these quote more than the token's entire supply, so we leave them out of the headline)</span></h3>
+    <div class="scroll" id="degwrap" style="display:none">
+      <table>
+        <thead><tr><th class="l" scope="col">Maker</th><th class="l" scope="col">Token</th><th class="l" scope="col">Note</th></tr></thead>
+        <tbody id="deg"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ---------- DEMO ---------- -->
+  <section id="demo" class="sec">
+    <div class="sec-head">
+      <h2>Guarded swap demo</h2>
+      <span class="sub">Grab a real position, punch in a swap size, and watch the SwapVM run it step by step. If the maker can't actually cover it, the guard kills the trade before anything moves.</span>
+    </div>
+    <div class="panel swap">
       <div class="pane controls">
         <div class="sd-field">
-          <label class="sd-label" for="sdPos">Aqua position <span class="sub">— real, from the coverage snapshot</span></label>
+          <label class="sd-label" for="sdPos">Aqua position <span class="sub">(real ones, from the snapshot)</span></label>
           <select class="sd-select" id="sdPos"></select>
           <p class="sd-cover" id="sdCover" aria-live="polite"></p>
         </div>
-
         <div class="sd-field">
-          <label class="sd-label" for="sdPay">You pay</label>
-          <div class="sd-pay">
-            <span class="cur">$</span>
-            <input id="sdPay" type="number" min="0" step="100" inputmode="decimal" value="2500" aria-describedby="sdHint" />
-          </div>
+          <label class="sd-label" for="sdPay">You pay (USD)</label>
+          <div class="sd-pay"><span class="cur">$</span><input id="sdPay" type="number" min="0" step="100" inputmode="decimal" value="2500" aria-describedby="sdHint" /></div>
         </div>
-
         <div class="sd-field">
-          <span class="sd-label" id="sdRecvLab">You receive <span class="sub">— honest price quote (pay ÷ token price)</span></span>
-          <div class="sd-receive" aria-labelledby="sdRecvLab">
-            <span class="amt" id="sdRecv">0</span>
-            <span class="sym" id="sdRecvSym">—</span>
-          </div>
+          <span class="sd-label" id="sdRecvLab">You receive <span class="sub">(pay ÷ token price)</span></span>
+          <div class="sd-receive" aria-labelledby="sdRecvLab"><span class="amt" id="sdRecv">0</span><span class="sym" id="sdRecvSym">token</span></div>
         </div>
-
         <div class="sd-field sd-toggle">
           <button type="button" class="sd-switch" id="sdGuard" role="switch" aria-checked="true" aria-pressed="true" aria-label="SolvencyGuard"></button>
           <span class="st">SolvencyGuard: <span id="sdGuardTxt" class="on">ON</span></span>
         </div>
-
         <p class="sd-hint" id="sdHint" aria-live="polite"></p>
-
-        <button type="button" class="btn btn-solid sd-run" id="sdRun">Simulate swap</button>
+        <button type="button" class="btn btn-primary sd-run" id="sdRun">Simulate swap</button>
       </div>
-
-      <!-- trace + verdict -->
       <div class="pane">
         <p class="sd-trace-h">SwapVM instruction trace</p>
         <ol class="sd-steps" id="sdSteps" aria-live="polite"></ol>
@@ -649,247 +413,135 @@
         <p class="sd-backing" id="sdBacking"></p>
       </div>
     </div>
+    <p class="sd-honesty">This pulls the maker's <b>real backing straight off-chain</b> with a public-node <code>eth_call</code>, and the yes/no comes from the <b>exact logic in our deployed, fork-tested instruction</b> (opcode <code>0x22</code>). Nothing gets sent to the chain.</p>
+  </section>
 
-    <p class="sd-honesty">Simulation — reads this position's <b>real on-chain backing</b> via a public-node <code style="font-family:var(--mono);font-size:12.5px">eth_call</code>; the SolvencyGuard verdict applies the <b>exact logic of our deployed, fork-tested instruction</b> (opcode <code style="font-family:var(--mono);font-size:12.5px">0x22</code>). No transaction is broadcast.</p>
-  </div>
-</section>
-
-<!-- ============ USE THE MCP ============ -->
-<section class="band band--paper" id="mcp">
-  <div class="inner">
-    <h2 class="section-h">Use the MCP</h2>
-    <p class="section-lede">Run the server locally and register it with any MCP client — Claude Desktop, Claude Code, or your own. Every figure is read live; nothing is mocked.</p>
-
-    <div class="split">
-      <div>
-        <pre><code><span class="cmt"># start the coverage MCP server</span>
-cd apps/mcp &amp;&amp; npm install
-
-<span class="cmt"># optional — use live Graph data instead of the</span>
-<span class="cmt"># keyless Blockscout fallback</span>
-export SUBGRAPH_URL="https://api.studio.thegraph.com/\
-query/&lt;id&gt;/overdraft/&lt;version&gt;"
-
-node src/server.js   <span class="cmt"># stdio MCP server</span></code></pre>
-        <ul class="toollist">
-          <li><code>aqua_coverage_summary</code> — network totals: quoted vs. backed, aggregate coverage, phantom, under-backed and degenerate counts.</li>
-          <li><code>aqua_most_overcommitted</code> — worst-coverage positions, ascending.</li>
-          <li><code>aqua_degenerate_positions</code> — positions whose virtual balance exceeds token supply.</li>
-          <li><code>aqua_maker_coverage</code> — per-token coverage for one maker.</li>
-        </ul>
-      </div>
-      <div>
-        <ul class="prompts">
-          <li>
-            <span class="q">"What is total phantom depth on Ethereum right now?"</span>
-            <span class="t">aqua_coverage_summary(ethereum)</span>
-          </li>
-          <li>
-            <span class="q">"Which makers are most over-committed on Base?"</span>
-            <span class="t">aqua_most_overcommitted(base, limit)</span>
-          </li>
-          <li>
-            <span class="q">"Are any positions advertising more than the token's supply?"</span>
-            <span class="t">aqua_degenerate_positions(ethereum)</span>
-          </li>
-          <li>
-            <span class="q">"Does maker 0x21cb… have enough backing for what it quotes?"</span>
-            <span class="t">aqua_maker_coverage(ethereum, 0x21cb…)</span>
-          </li>
-        </ul>
-      </div>
+  <!-- ---------- BUILD ---------- -->
+  <section id="build" class="sec">
+    <div class="sec-head">
+      <h2>What we built</h2>
+      <span class="sub">Four pieces. Here's what each one does, and which prize track it's aimed at.</span>
+    </div>
+    <div class="scroll">
+      <table class="build-table">
+        <thead><tr><th class="l">Tool</th><th class="l">What it is</th><th class="l">Track</th><th class="l">Evidence</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="l tool">Measure</td>
+            <td class="l what">The coverage engine. It pulls every position from The Graph, reads each maker's actual backing off-chain (<code>min(balanceOf, allowance→Aqua)</code>), prices it in USD with DefiLlama, and flags the junk.</td>
+            <td class="l"><span class="lb-note">just the plumbing</span></td>
+            <td class="l proof"><div><span class="ok">15 / 15</span> match on-chain rawBalances</div></td>
+          </tr>
+          <tr>
+            <td class="l tool">Verify</td>
+            <td class="l what">The Honesty Probe, run on a mainnet fork. When the maker's good for it, the quote matches the fill down to the wei. When it isn't (it quoted 15,818 but only held about 11,298), the swap blows up at settlement.</td>
+            <td class="l"><span class="trk"><b>1inch</b><span class="lb-note">Build an Aqua App</span></span></td>
+            <td class="l proof"><div><span class="ok">0 wei</span> quote vs. executed</div><div><span class="no">reverts</span> SafeTransferFromFailed</div></td>
+          </tr>
+          <tr>
+            <td class="l tool">Fix</td>
+            <td class="l what">SolvencyGuard, our own SwapVM instruction (opcode <code>0x22</code>). Without it, a position happily quotes 90,909 WETH on 5 WETH of backing. With it, that same quote reverts <code>InsufficientCoverage</code> up front. Makers who are actually funded never get touched.</td>
+            <td class="l"><span class="trk"><b>1inch</b><span class="lb-note">Build an Aqua App</span></span></td>
+            <td class="l proof"><div><span class="no">reverts</span> InsufficientCoverage</div><div><span class="ok">4 / 4</span> fork tests pass</div></td>
+          </tr>
+          <tr>
+            <td class="l tool">Serve</td>
+            <td class="l what">One Substreams module and one Subgraph schema, reused across chains (Firehose-only ones included), plus an MCP server and SKILL so an agent can just ask about Aqua solvency in plain English over live Graph data.</td>
+            <td class="l"><span class="trk"><b>The Graph</b><span class="lb-note">Composable / Standardized</span><b style="margin-top:6px;">The Graph</b><span class="lb-note">AI Tooling</span></span></td>
+            <td class="l proof"><div><span class="ok">running</span> subgraph + MCP</div></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div class="skill-block">
-      <h3>The agent SKILL</h3>
-      <p><span class="name">aqua-coverage</span> is a reusable SKILL any agent can load as infrastructure. It wraps the four tools above with the context an agent needs to interrogate Aqua liquidity coverage — which makers are over-committed, how much quoted depth is phantom, and which positions advertise more than exists — across every live position on a chain. Point <span class="name">SUBGRAPH_URL</span> at the Overdraft subgraph and enumeration runs on live Graph data; the backed side is always read live on-chain. It loads when an agent is asked about any of these:</p>
-      <div class="triggers">
-        <span>Aqua solvency</span>
-        <span>coverage</span>
-        <span>phantom depth</span>
-        <span>over-committed makers</span>
-        <span>ethereum / base / arbitrum</span>
+    <div class="over-grid" style="margin-top:16px;">
+      <div class="panel">
+        <div class="panel-pad">
+          <h3>Data flow</h3>
+          <div class="flow">
+            <span class="node"><b>Aqua registry</b><span>16 chains</span></span>
+            <span class="arr">→</span>
+            <span class="node"><b>Subgraph + Substreams</b><span>one schema</span></span>
+            <span class="arr">→</span>
+            <span class="node"><b>Coverage engine</b><span>+ live eth_call</span></span>
+            <span class="arr">→</span>
+            <span class="node"><b>MCP + this dashboard</b></span>
+          </div>
+          <p class="lb-note" style="margin-top:12px;">The Graph handles the listing. The backing is always read fresh off-chain.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-pad">
+          <h3>Query it with the MCP</h3>
+          <ul class="prompts" style="margin-top:8px;border:1px solid var(--border);border-radius:6px;">
+            <li><span class="q">"Total phantom depth on Ethereum right now?"</span><span class="t">aqua_coverage_summary(ethereum)</span></li>
+            <li><span class="q">"Which makers are most over-committed on Base?"</span><span class="t">aqua_most_overcommitted(base, limit)</span></li>
+            <li><span class="q">"Does maker 0x21cb… back what it quotes?"</span><span class="t">aqua_maker_coverage(ethereum, 0x21cb…)</span></li>
+          </ul>
+          <p class="skill-line">It's packaged as a reusable SKILL called <code>aqua-coverage</code>. Point <code>SUBGRAPH_URL</code> at our subgraph and any agent can pick it up. To run it yourself: <code>cd apps/mcp &amp;&amp; npm i &amp;&amp; node src/server.js</code>.</p>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ============ ARCHITECTURE ============ -->
-<section class="band" id="architecture">
-  <div class="inner">
-    <h2 class="section-h">Architecture</h2>
-    <p class="section-lede measure">One registry, two enumeration tracks into the coverage engine — which fans out to the MCP and the leaderboard — plus a fork branch that verifies the finding and ships the fix.</p>
-
-    <div class="arch">
-      <svg class="arch-svg" viewBox="0 0 960 430" role="img" aria-label="Architecture: Aqua registry feeds a subgraph and a Substreams module, which feed the coverage engine (with live eth_call reads). The engine feeds the MCP server and the public leaderboard. A mainnet-fork branch runs the Honesty Probe, which leads to the SolvencyGuard instruction.">
-        <defs>
-          <marker id="arw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0 0L10 5L0 10z" fill="#3fae9e"/>
-          </marker>
-          <marker id="arwr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0 0L10 5L0 10z" fill="#d7263d"/>
-          </marker>
-          <style>
-            .box{fill:#0b2236;stroke:#16354f;stroke-width:1;rx:10;}
-            .box.eng{stroke:#3fae9e;}
-            .box.guard{stroke:#d7263d;}
-            .t{fill:#e9eef0;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;}
-            .st{fill:#7f93a3;font-family:'IBM Plex Mono',monospace;font-size:11.5px;}
-            .edge{stroke:#3fae9e;stroke-width:1.4;fill:none;marker-end:url(#arw);}
-            .edge.dash{stroke-dasharray:5 4;}
-            .edge.red{stroke:#d7263d;marker-end:url(#arwr);}
-            .elab{fill:#7f93a3;font-family:'IBM Plex Mono',monospace;font-size:10.5px;}
-          </style>
-        </defs>
-
-        <!-- registry -->
-        <rect class="box" x="20" y="180" width="180" height="66" rx="10"/>
-        <text class="t" x="36" y="210">Aqua registry</text>
-        <text class="st" x="36" y="230">same address · 16 chains</text>
-
-        <!-- subgraph -->
-        <rect class="box" x="290" y="70" width="200" height="66" rx="10"/>
-        <text class="t" x="306" y="100">Subgraph</text>
-        <text class="st" x="306" y="120">ETH + Base · one schema</text>
-
-        <!-- substreams -->
-        <rect class="box" x="290" y="290" width="200" height="66" rx="10"/>
-        <text class="t" x="306" y="320">Substreams</text>
-        <text class="st" x="306" y="340">Firehose-only chains</text>
-
-        <!-- coverage engine -->
-        <rect class="box eng" x="560" y="176" width="200" height="76" rx="10"/>
-        <text class="t" x="576" y="206">Coverage engine</text>
-        <text class="st" x="576" y="226">min(wallet, allowance)</text>
-        <text class="st" x="576" y="242">/ Σ virtual · USD priced</text>
-
-        <!-- MCP -->
-        <rect class="box" x="820" y="96" width="120" height="60" rx="10"/>
-        <text class="t" x="836" y="122">MCP</text>
-        <text class="st" x="836" y="140">+ SKILL</text>
-
-        <!-- leaderboard -->
-        <rect class="box" x="820" y="270" width="120" height="60" rx="10"/>
-        <text class="t" x="836" y="296">Leaderboard</text>
-        <text class="st" x="836" y="314">public site</text>
-
-        <!-- probe -->
-        <rect class="box" x="290" y="382" width="200" height="40" rx="10" style="display:none"/>
-
-        <!-- edges from registry -->
-        <path class="edge" d="M200 205 C 245 205, 250 103, 288 103"/>
-        <text class="elab" x="212" y="150">Shipped / Docked</text>
-        <path class="edge dash" d="M200 221 C 245 221, 250 323, 288 323"/>
-        <text class="elab" x="214" y="270">Firehose</text>
-
-        <!-- subgraph/substreams -> engine -->
-        <path class="edge" d="M490 103 C 530 103, 528 200, 558 200"/>
-        <path class="edge dash" d="M490 323 C 530 323, 528 228, 558 228"/>
-
-        <!-- live eth_call registry -> engine (curved over top) -->
-        <path class="edge" d="M110 180 C 110 30, 660 20, 660 174"/>
-        <text class="elab" x="300" y="26">live eth_call · balanceOf / allowance / rawBalances</text>
-
-        <!-- engine -> MCP + leaderboard -->
-        <path class="edge" d="M760 196 C 795 196, 800 128, 818 128"/>
-        <path class="edge" d="M760 232 C 795 232, 800 298, 818 298"/>
-
-        <!-- fork branch: registry -> probe -> guard (bottom, red) -->
-        <rect class="box" x="560" y="330" width="180" height="52" rx="10"/>
-        <text class="t" x="576" y="356">Honesty Probe</text>
-        <text class="st" x="576" y="372">mainnet fork · quote vs swap</text>
-
-        <rect class="box guard" x="770" y="378" width="170" height="44" rx="10"/>
-        <text class="t" x="786" y="405">SolvencyGuard</text>
-
-        <path class="edge red" d="M130 246 C 130 356, 556 356, 558 356"/>
-        <text class="elab" x="180" y="380" style="fill:#d7263d">mainnet fork</text>
-        <path class="edge red" d="M740 372 C 758 386, 760 400, 768 400"/>
-      </svg>
-
-      <div class="arch-caps">
-        <div><b>Index</b> — Subgraph + Substreams on one schema, both Graph tracks.</div>
-        <div><b>Diagnose</b> — the engine joins quoted depth with live-read backed depth into a per-(maker, token) ratio.</div>
-        <div><b>Verify</b> — a Foundry fork probe proves quote-vs-execution divergence and phantom fills.</div>
-        <div><b>Fix</b> — SolvencyGuard makes a position refuse to quote beyond real backing.</div>
-        <div><b>Serve</b> — an MCP server, a SKILL, and this public leaderboard over the same data.</div>
-      </div>
+  <!-- ---------- VERIFY ---------- -->
+  <section id="verify" class="sec">
+    <div class="sec-head">
+      <h2>Verify the claims</h2>
+      <span class="sub">Don't take our word for any of it. Here's how to rerun the whole thing.</span>
     </div>
-  </div>
-</section>
-
-<!-- ============ VERIFY / REPO ============ -->
-<section class="band band--paper" id="verify">
-  <div class="inner">
-    <h2 class="section-h">Verify our claims</h2>
-    <p class="section-lede">Nothing here is asserted. Regenerate the headline number yourself, reconstruct a real position from on-chain bytes, and cross-check coverage on a fork.</p>
-
     <div class="verify-grid">
       <pre><code><span class="cmt"># reproduce the Ethereum coverage scan + headline</span>
 <span class="cmt"># (keyless: Blockscout + public RPC + DefiLlama)</span>
 cd packages/coverage &amp;&amp; npm install
 node src/run.js --chain ethereum --deep
 
-<span class="cmt"># reconstruct a real position's Order from on-chain</span>
-<span class="cmt"># Shipped bytes (verifies keccak256(strategy)==hash)</span>
+<span class="cmt"># reconstruct a real position's Order from on-chain bytes</span>
 cd spikes/order &amp;&amp; npx tsx recover-order.mjs
 
 <span class="cmt"># on-chain coverage cross-check on a mainnet fork</span>
 cd contracts &amp;&amp; forge test -vv</code></pre>
-
-      <div class="linkrows">
-        <div class="linkrow"><span class="lk">Repository</span><a href="https://github.com/LeonardoRyuta/overdraft" target="_blank" rel="noopener">github.com/LeonardoRyuta/overdraft</a></div>
-        <div class="linkrow"><span class="lk">Live leaderboard</span><a href="https://leonardoryuta.github.io/overdraft/" target="_blank" rel="noopener">leonardoryuta.github.io/overdraft</a></div>
-        <div class="linkrow"><span class="lk">Subgraph · Ethereum</span><a href="https://api.studio.thegraph.com/query/1724457/overdraft/v0.0.1" target="_blank" rel="noopener">api.studio.thegraph.com/query/1724457/overdraft/v0.0.1</a></div>
-        <div class="linkrow"><span class="lk">Subgraph · Base</span><a href="https://api.studio.thegraph.com/query/1724457/overdraft-base/v0.0.1" target="_blank" rel="noopener">api.studio.thegraph.com/query/1724457/overdraft-base/v0.0.1</a></div>
+      <div class="panel">
+        <div class="panel-pad">
+          <div class="linkrow"><span class="lk">Repository</span><a href="https://github.com/LeonardoRyuta/overdraft" target="_blank" rel="noopener">github.com/LeonardoRyuta/overdraft</a></div>
+          <div class="linkrow"><span class="lk">Live site</span><a href="https://leonardoryuta.github.io/overdraft/" target="_blank" rel="noopener">leonardoryuta.github.io/overdraft</a></div>
+          <div class="linkrow"><span class="lk">Subgraph · ETH</span><a href="https://api.studio.thegraph.com/query/1724457/overdraft/v0.0.1" target="_blank" rel="noopener">api.studio.thegraph.com/query/1724457/overdraft/v0.0.1</a></div>
+          <div class="linkrow"><span class="lk">Subgraph · Base</span><a href="https://api.studio.thegraph.com/query/1724457/overdraft-base/v0.0.1" target="_blank" rel="noopener">api.studio.thegraph.com/query/1724457/overdraft-base/v0.0.1</a></div>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
+
+</div>
+</main>
 
 <footer>
-  <div class="inner">
-    <div>
-      <b>Overdraft</b> — measuring how much of 1inch Aqua's advertised liquidity actually exists.
-      <div class="formula" style="margin-top:8px;">coverage = min(wallet, allowance→Aqua) / Σ virtual committed · phantom = max(0, committed − backed)</div>
-    </div>
-    <div>ETHOnline 2026 · figures verified against on-chain rawBalances</div>
+  <div class="wrap">
+    <div>Overdraft, built for ETHOnline 2026.</div>
+    <div class="fx">coverage = min(wallet, allowance→Aqua) / Σ committed · verified vs on-chain rawBalances</div>
   </div>
 </footer>
 
 <script>
 "use strict";
 
-/* ---------- hero waterline: one orchestrated moment ---------- */
+/* ---------- scrollspy nav ---------- */
 (function () {
-  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var water = document.getElementById("water");
-  var rule = document.getElementById("rule");
-  var band = document.getElementById("backedBand");
-  var colInner = document.getElementById("colInner");
-  if (!water || !rule || !band || !colInner) return;
-
-  // Ethereum: coverage 6.3% -> backed sliver is 6.3% of column; phantom fills the rest below the line.
-  var coverage = 0.063;                 // backed / quoted (aggregate USD)
-  var bandH = Math.max(4, coverage * 100); // % of column height for the teal backed sliver
-  var waterTop = bandH;                 // waterline sits just under the backed band
-  var waterH = 100 - waterTop;          // phantom region height, %
-
-  function place() {
-    water.style.height = waterH + "%";
-    rule.style.bottom = waterH + "%";
-    band.style.bottom = waterH + "%";
-    band.style.height = bandH + "%";
-    band.style.opacity = "1";
-  }
-
-  if (reduce) { place(); return; }
-
-  // start collapsed, then settle once on load
-  colInner.classList.add("js-anim");
-  // force initial layout, then trigger the transition on next frame
-  requestAnimationFrame(function () {
-    requestAnimationFrame(place);
+  if (!("IntersectionObserver" in window)) return;
+  var links = Array.prototype.slice.call(document.querySelectorAll("#navLinks a"));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      links.forEach(function (a) { a.classList.remove("active"); });
+      var a = map[e.target.id];
+      if (a) a.classList.add("active");
+    });
+  }, { rootMargin: "-40% 0px -55% 0px", threshold: 0 });
+  ["overview", "positions", "demo", "build", "verify"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) obs.observe(el);
   });
 })();
 
@@ -904,34 +556,44 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
   var usdFull = function (x) { return "$" + Math.round(x || 0).toLocaleString("en-US"); };
   var shortAddr = function (a) { return a.slice(0, 6) + "…" + a.slice(-4); };
   var covClass = function (r) { return r == null ? "" : r < 0.7 ? "cov-red" : r < 1 ? "cov-amber" : "cov-green"; };
-  var covColor = function (r) { return r == null ? "#7f93a3" : r < 0.7 ? "#d7263d" : r < 1 ? "#e9a13b" : "#3fae9e"; };
-
+  var covColor = function (r) { return r == null ? "#8b949e" : r < 0.7 ? "#d92d20" : r < 1 ? "#b7791f" : "#1a8f4c"; };
   var $ = function (id) { return document.getElementById(id); };
 
   function render(d) {
     var h = d.headline || {};
     var under = d.real.filter(function (r) { return r.ratio !== null && r.ratio < 0.999; }).length;
+    var q = h.usdQuoted || 0, bk = h.usdBacked || 0, ph = h.usdPhantom || 0;
+    var cov = h.coverageUsd;
 
-    $("meta").textContent =
-      d.chain + " · source: " + d.source + " · " + d.real.length + " real positions (" +
-      under + " under-backed) · " + d.degenerate.length + " degenerate · " + h.priced + " priced";
+    $("covHeadline").textContent = cov == null ? "n/a" : (cov * 100).toFixed(1) + "%";
+    $("covHeadline").className = "cov-num " + (cov == null ? "" : cov < 0.5 ? "bad" : cov < 0.9 ? "warn" : "good");
+    $("covSub").textContent = usd(bk) + " backed of " + usd(q) + " quoted";
+
+    var bpct = q > 0 ? Math.max(0, Math.min(100, bk / q * 100)) : 0;
+    $("covbar").innerHTML = '<span class="s-backed" style="width:' + bpct + '%"></span>' +
+      '<span class="s-phantom" style="width:' + (100 - bpct) + '%"></span>';
+    $("covlegend").innerHTML =
+      '<span><i class="good"></i>Backed ' + usd(bk) + ' (' + bpct.toFixed(1) + '%)</span>' +
+      '<span><i class="bad"></i>Phantom ' + usd(ph) + ' (' + (100 - bpct).toFixed(1) + '%)</span>';
 
     $("cards").innerHTML = [
-      ["Quoted depth", usd(h.usdQuoted), ""],
-      ["Backed depth", usd(h.usdBacked), ""],
-      ["Aggregate coverage", h.coverageUsd == null ? "n/a" : (h.coverageUsd * 100).toFixed(1) + "%", "cov"],
-      ["Phantom depth", usd(h.usdPhantom), "phantom"]
+      ["Quoted depth", usd(q), ""],
+      ["Backed depth", usd(bk), "good"],
+      ["Phantom depth", usd(ph), "bad"],
+      ["Active positions", d.real.length.toLocaleString("en-US"), ""]
     ].map(function (row) {
-      return '<div class="card ' + row[2] + '"><div class="k">' + row[0] +
-             '</div><div class="v">' + row[1] + '</div></div>';
+      return '<div class="card"><div class="k">' + row[0] + '</div><div class="v ' + row[2] + ' num">' + row[1] + '</div></div>';
     }).join("");
+
+    $("meta").innerHTML = 'Straight from the ' + d.source + '. <b>' + d.real.length.toLocaleString("en-US") +
+      '</b> positions in all, <b>' + under.toLocaleString("en-US") + '</b> of them under-backed, <b>' +
+      d.degenerate.length + '</b> degenerate, <b>' + h.priced + '</b> with a price.';
 
     var explorer = d.chain === "base" ? "https://basescan.org/address/"
       : d.chain === "arbitrum" ? "https://arbiscan.io/address/"
       : "https://etherscan.io/address/";
 
     var shown = d.real.slice(0, 200);
-    $("lbhint").textContent = "showing " + shown.length + " of " + d.real.length;
     $("rows").innerHTML = shown.map(function (r) {
       var pctv = r.ratio == null ? null : Math.min(r.ratio, 1.5);
       var w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
@@ -939,13 +601,21 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       return '<tr>' +
         '<td class="l maker"><a href="' + explorer + r.maker + '" target="_blank" rel="noopener">' + shortAddr(r.maker) + '</a></td>' +
         '<td class="l">' + (r.symbol || "?") + '</td>' +
-        '<td class="num"><span class="bar"><span style="width:' + w + '%;background:' + covColor(r.ratio) + '"></span></span><span class="' + covClass(r.ratio) + '">' + covTxt + '</span></td>' +
+        '<td class="num"><span class="cbar"><span class="' + covClass(r.ratio) + '">' + covTxt + '</span><span class="track"><span style="width:' + w + '%;background:' + covColor(r.ratio) + '"></span></span></span></td>' +
         '<td class="num">' + usdFull(r.usdQuoted) + '</td>' +
         '<td class="num">' + usdFull(r.usdBacked) + '</td>' +
         '<td class="num ' + (r.usdPhantom > 0 ? 'ph-red' : '') + '">' + usdFull(r.usdPhantom) + '</td>' +
-        '<td class="l"><span class="pill">' + r.binding + '</span></td>' +
+        '<td class="l"><span class="binding">' + r.binding + '</span></td>' +
         '</tr>';
     }).join("");
+
+    var tb = $("rows"); tb.classList.add("collapsed");
+    var tog = $("lbToggle");
+    if (shown.length > 12) {
+      tog.style.display = "";
+      tog.textContent = "Show all " + shown.length + " positions";
+      tog.setAttribute("aria-expanded", "false");
+    } else { tog.style.display = "none"; }
 
     var showDeg = d.degenerate.length > 0;
     $("degh").style.display = showDeg ? "" : "none";
@@ -964,7 +634,7 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(render)
       .catch(function (e) {
-        $("meta").textContent = "Could not load " + chain + " snapshot (" + e.message + "). Open the page over HTTP, not file://.";
+        $("meta").textContent = "Could not load " + chain + " snapshot (" + e.message + "). Serve over HTTP, not file://.";
       });
   }
 
@@ -980,28 +650,30 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       e.preventDefault();
       var next = e.key === "ArrowRight" ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
-      tabs[next].focus();
-      selectTab(tabs[next]);
+      tabs[next].focus(); selectTab(tabs[next]);
     });
+  });
+
+  $("lbToggle").addEventListener("click", function () {
+    var tb = $("rows");
+    var collapsed = tb.classList.toggle("collapsed");
+    var n = tb.querySelectorAll("tr").length;
+    this.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    this.textContent = collapsed ? ("Show all " + n + " positions") : "Show fewer";
   });
 
   load("ethereum");
 })();
 
-/* ---------- TRY IT: guarded swap simulator ---------- */
+/* ---------- guarded swap simulator ---------- */
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // On-chain endpoints (read-only). backing = min(balanceOf, max(allowance→Aqua, allowance→Router)).
   var RPC = "https://ethereum-rpc.publicnode.com";
   var AQUA = "0x1111113ccf1426a8e30e2bff5e005d929bf6a90a";
   var ROUTER = "0x111111338c5091e8440b67b168bae16a668ac0de";
 
-  // Real positions lifted from public/coverage-ethereum.json (real[]): one well-backed,
-  // one partially under-backed, two phantom (incl. the headline $6.0M WETH maker).
-  // `backed`/`ratio` are the (stale) coverage-snapshot values; `committed` is Σ virtual balance
-  // from the same snapshot. Live backing is read on-chain — the snapshot is only a labelled fallback.
   var POS = [
     { maker: "0xf9c6251bb769bd04c9d7eb1599f4e1c5cb3208d3", token: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
       symbol: "wstETH", decimals: 18, backed: "6812806664872661330", committed: "5723754277656028508", ratio: 1.1902688924763936, priceUsd: 3095.562491594323 },
@@ -1018,16 +690,9 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       stepsEl = $("sdSteps"), verdictEl = $("sdVerdict"), backingEl = $("sdBacking"), coverEl = $("sdCover");
   if (!posSel || !payIn || !runBtn) return;
 
-  var guardOn = true;
-  var runToken = 0;
-  var timers = [];
-  var liveCache = {};        // position index -> { backed:BigInt, block, live } (last live/snapshot read)
-  var hintToken = 0;         // guards out-of-order async hint/cover updates
-  var debounceTimer = null;  // debounces the live re-read while typing
-
+  var guardOn = true, runToken = 0, timers = [], liveCache = {}, hintToken = 0, debounceTimer = null;
   var shortAddr = function (a) { return a.slice(0, 6) + "…" + a.slice(-4); };
 
-  // Format a token amount (base-unit-aware): up to min(decimals,6) fraction digits, grouped.
   function fmtAmt(x, decimals) {
     if (!isFinite(x) || x < 0) return "0";
     var maxFrac = Math.min(decimals || 6, 6);
@@ -1035,26 +700,16 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
     return x.toLocaleString("en-US", { maximumFractionDigits: maxFrac, minimumFractionDigits: 0 });
   }
   function pad(addr) { return addr.toLowerCase().replace(/^0x/, "").padStart(64, "0"); }
-
   function cur() { return POS[posSel.selectedIndex] || POS[0]; }
   function payUsd() { var v = parseFloat(payIn.value); return isFinite(v) && v > 0 ? v : 0; }
   function amountOut() { var p = cur(); return p.priceUsd ? payUsd() / p.priceUsd : 0; }
 
-  // ---- populate dropdown ----
-  // No coverage % here on purpose: the snapshot ratio is stale/volatile and would contradict the
-  // live guard verdict. Live "Backing now: …" is shown on-card once a position is selected.
   posSel.innerHTML = POS.map(function (p, i) {
     return '<option value="' + i + '">' + p.symbol + " · maker " + shortAddr(p.maker) + "</option>";
   }).join("");
 
   function clearTimers() { timers.forEach(clearTimeout); timers = []; }
 
-  // ---- one live-backing read, reused by the hint, the on-card figure AND the Simulate verdict ----
-  // Reads the maker's LIVE backing for one token on-chain:
-  //   min(balanceOf(maker), max(allowance→Aqua, allowance→Router))
-  // Resolves { backed:<BigInt base units>, block:<Number|null>, live:true } on success, or
-  // { backed:<snapshotBacked BigInt>, block:null, live:false } on any failure/timeout. `decimals`
-  // is part of the callable signature for the caller's convenience (backed is returned in base units).
   function liveBacking(maker, token, decimals, snapshotBacked) {
     var fallback = { backed: snapshotBacked, block: null, live: false };
     if (!window.fetch) return Promise.resolve(fallback);
@@ -1066,10 +721,7 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
     ];
     var ctrl = window.AbortController ? new AbortController() : null;
     var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 6000);
-    return fetch(RPC, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify(batch), signal: ctrl ? ctrl.signal : undefined
-    })
+    return fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(batch), signal: ctrl ? ctrl.signal : undefined })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (arr) {
         if (!Array.isArray(arr)) throw new Error("bad response");
@@ -1088,35 +740,20 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       .then(function (res) { clearTimeout(to); return res; });
   }
 
-  // A backing result -> the SAME label the verdict shows, so hint and verdict never disagree.
   function backingLabel(res) {
-    return res.live
-      ? (res.block != null ? "(live, block " + res.block.toLocaleString("en-US") + ")" : "(live)")
-      : "(snapshot — RPC unavailable)";
+    return res.live ? (res.block != null ? "(live, block " + res.block.toLocaleString("en-US") + ")" : "(live)") : "(snapshot, couldn't reach the RPC)";
   }
-  // Live coverage = live backing ÷ snapshot Σ committed (both base units).
   function coveragePct(p, backedBase) {
     var committed = 0n;
     try { committed = BigInt(p.committed); } catch (e) { committed = 0n; }
     if (committed <= 0n) return null;
     return (Number(backedBase) / Number(committed)) * 100;
   }
-  function fmtPct(x) {
-    if (x <= 0) return "0";
-    if (x < 0.1) return "<0.1";
-    if (x < 10) return x.toFixed(1);
-    return Math.round(x).toString();
-  }
+  function fmtPct(x) { if (x <= 0) return "0"; if (x < 0.1) return "<0.1"; if (x < 10) return x.toFixed(1); return Math.round(x).toString(); }
   function backingNum(p, res) { return Number(res.backed) / Math.pow(10, p.decimals); }
 
-  // "You receive" quote — synchronous, updates on every keystroke.
-  function updateReceive() {
-    var p = cur();
-    recvSym.textContent = p.symbol;
-    recvEl.textContent = fmtAmt(amountOut(), p.decimals);
-  }
+  function updateReceive() { var p = cur(); recvSym.textContent = p.symbol; recvEl.textContent = fmtAmt(amountOut(), p.decimals); }
 
-  // On-card live figure: "Backing now: X TOKEN ($Y) · coverage Z% (live, block N)".
   function renderCover(p, res) {
     var backing = backingNum(p, res);
     var pct = coveragePct(p, res.backed);
@@ -1125,78 +762,53 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       (pct == null ? "" : " · coverage " + fmtPct(pct) + "%") + " " + backingLabel(res);
   }
 
-  // Typing hint driven by LIVE backing — matches exactly what Simulate will decide (over = out > backing).
-  // Never asserts "Guard would pass" from snapshot data.
   function setHint(p, res) {
     hintEl.className = "sd-hint";
     if (payUsd() <= 0) { hintEl.textContent = "Enter an amount to pay."; return; }
-    var backing = backingNum(p, res);
-    var out = amountOut();
-    var lbl = backingLabel(res);
+    var backing = backingNum(p, res), out = amountOut(), lbl = backingLabel(res);
     if (!res.live) {
-      hintEl.textContent = "Backing " + lbl + ": " + fmtAmt(backing, p.decimals) + " " + p.symbol +
-        " — can't confirm live backing right now. Simulate reads it on-chain before deciding.";
+      hintEl.textContent = "Couldn't reach the RPC, so this is the snapshot: " + fmtAmt(backing, p.decimals) + " " + p.symbol + " " + lbl + ". Hit Simulate and it'll read the real number on-chain.";
     } else if (backing <= 0) {
       hintEl.className = "sd-hint over";
-      hintEl.textContent = "Backing is 0 " + p.symbol + " " + lbl + " — any amount exceeds it. Guard would block.";
+      hintEl.textContent = "This maker holds 0 " + p.symbol + " right now " + lbl + ", so anything you swap gets blocked.";
     } else if (out <= backing) {
       hintEl.className = "sd-hint ok";
-      hintEl.textContent = "Within backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol +
-        " ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + " " + lbl + "). Guard would pass.";
+      hintEl.textContent = "This one's covered (" + fmtAmt(backing, p.decimals) + " " + p.symbol + " ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + " " + lbl + "), so the guard lets it through.";
     } else {
       hintEl.className = "sd-hint over";
-      hintEl.textContent = "Exceeds backing (" + fmtAmt(backing, p.decimals) + " " + p.symbol + " " + lbl +
-        ") — guard would block. Threshold ≈ $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + ".";
+      hintEl.textContent = "That's more than the maker can cover (" + fmtAmt(backing, p.decimals) + " " + p.symbol + " " + lbl + "), so the guard blocks it. It'd go through under about $" + Math.round(backing * p.priceUsd).toLocaleString("en-US") + ".";
     }
   }
 
-  // Read live backing for the current position, cache it, then drive the on-card figure + hint.
   function refreshLive() {
     var p = cur(), idx = posSel.selectedIndex, mine = ++hintToken;
-    if (liveCache[idx]) {
-      renderCover(p, liveCache[idx]);   // show what we have while refreshing
-      setHint(p, liveCache[idx]);
-    } else {
+    if (liveCache[idx]) { renderCover(p, liveCache[idx]); setHint(p, liveCache[idx]); }
+    else {
       coverEl.textContent = "Reading live backing on-chain…";
       hintEl.className = "sd-hint";
       hintEl.textContent = payUsd() > 0 ? "Reading the maker's live backing on-chain…" : "Enter an amount to pay.";
     }
     liveBacking(p.maker, p.token, p.decimals, BigInt(p.backed)).then(function (res) {
-      if (mine !== hintToken || posSel.selectedIndex !== idx) return; // superseded / position changed
-      liveCache[idx] = res;
-      renderCover(p, res);
-      setHint(p, res);
+      if (mine !== hintToken || posSel.selectedIndex !== idx) return;
+      liveCache[idx] = res; renderCover(p, res); setHint(p, res);
     });
   }
 
-  function resetTrace() {
-    clearTimers();
-    stepsEl.innerHTML = "";
-    verdictEl.className = "sd-verdict";
-    verdictEl.innerHTML = "";
-    backingEl.textContent = "";
-  }
+  function resetTrace() { clearTimers(); stepsEl.innerHTML = ""; verdictEl.className = "sd-verdict"; verdictEl.innerHTML = ""; backingEl.textContent = ""; }
 
-  posSel.addEventListener("change", function () {
-    resetTrace();
-    updateReceive();
-    refreshLive();               // immediate live read for the newly-selected position
-  });
+  posSel.addEventListener("change", function () { resetTrace(); updateReceive(); refreshLive(); });
   payIn.addEventListener("input", function () {
     updateReceive();
     var cached = liveCache[posSel.selectedIndex];
-    if (cached) setHint(cur(), cached);       // responsive: re-check against cached live backing
+    if (cached) setHint(cur(), cached);
     else if (payUsd() <= 0) { hintEl.className = "sd-hint"; hintEl.textContent = "Enter an amount to pay."; }
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(refreshLive, 400);   // debounced live re-read (~400ms)
+    clearTimeout(debounceTimer); debounceTimer = setTimeout(refreshLive, 400);
   });
-
   guardBtn.addEventListener("click", function () {
     guardOn = !guardOn;
     guardBtn.setAttribute("aria-checked", guardOn ? "true" : "false");
     guardBtn.setAttribute("aria-pressed", guardOn ? "true" : "false");
-    guardTxt.textContent = guardOn ? "ON" : "OFF";
-    guardTxt.className = guardOn ? "on" : "off";
+    guardTxt.textContent = guardOn ? "ON" : "OFF"; guardTxt.className = guardOn ? "on" : "off";
     resetTrace();
   });
 
@@ -1209,110 +821,60 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       { op: "XYCSwap", sub: "swap curve · computes amountOut", state: "pass", stat: "computed" },
       { op: "ProtocolFee", sub: "Aqua protocol fee applied", state: "pass", stat: "applied" }
     ];
-    if (guard) {
-      steps.push({
-        op: "SolvencyGuard · opcode 0x22",
-        sub: "coverage check · min(wallet, allowance→Aqua)",
-        state: over ? "fail" : "pass",
-        stat: over ? "HALT · InsufficientCoverage" : "coverage OK"
-      });
-    } else {
-      steps.push({
-        op: "Aqua.pull · safeTransferFrom",
-        sub: "settlement · pulls tokenOut from the maker's wallet",
-        state: over ? "fail" : "pass",
-        stat: over ? "revert · SafeTransferFromFailed" : "settled"
-      });
-    }
+    if (guard) steps.push({ op: "SolvencyGuard · opcode 0x22", sub: "coverage check · min(wallet, allowance→Aqua)", state: over ? "fail" : "pass", stat: over ? "HALT · InsufficientCoverage" : "coverage OK" });
+    else steps.push({ op: "Aqua.pull · safeTransferFrom", sub: "settlement · pulls tokenOut from the wallet", state: over ? "fail" : "pass", stat: over ? "revert · SafeTransferFromFailed" : "settled" });
     return steps;
   }
-
   function renderStep(s, revealed) {
     var li = document.createElement("li");
     li.className = "sd-step" + (revealed ? (" show " + s.state) : "");
     var icon = !revealed ? DOT : (s.state === "fail" ? CROSS : TICK);
-    li.innerHTML =
-      '<span class="tick">' + icon + '</span>' +
-      '<span class="op">' + s.op + '<span class="sub">' + s.sub + '</span></span>' +
-      '<span class="stat">' + (revealed ? s.stat : "queued") + '</span>';
+    li.innerHTML = '<span class="tick">' + icon + '</span><span class="op">' + s.op + '<span class="sub">' + s.sub + '</span></span><span class="stat">' + (revealed ? s.stat : "queued") + '</span>';
     return li;
   }
-
-  function showVerdict(over, guard, p, out, backing, halted) {
-    var outS = fmtAmt(out, p.decimals) + " " + p.symbol;
-    var backS = fmtAmt(backing, p.decimals) + " " + p.symbol;
+  function showVerdict(over, guard, p, out, backing) {
+    var outS = fmtAmt(out, p.decimals) + " " + p.symbol, backS = fmtAmt(backing, p.decimals) + " " + p.symbol;
     if (!over) {
       verdictEl.className = "sd-verdict show ok";
-      verdictEl.innerHTML = '<span class="vh">Swap executes</span>' +
-        outS + " pulled from the maker's wallet. Backing covers the quote — the guard never blocks a trade a maker can settle.";
+      verdictEl.innerHTML = '<span class="vh">Swap goes through</span>' + outS + " comes out of the maker's wallet, no problem. There's enough backing here, so the guard stays out of the way.";
     } else if (guard) {
       verdictEl.className = "sd-verdict show bad";
-      verdictEl.innerHTML = '<span class="vh">Reverted — SolvencyGuard</span>' +
-        '<code>InsufficientCoverage(requested ' + outS + ', backed ' + backS + ')</code><br>' +
-        "SolvencyGuard refused the swap <b>before any transfer</b> — you keep your gas.";
+      verdictEl.innerHTML = '<span class="vh">Blocked by SolvencyGuard</span><code>InsufficientCoverage(requested ' + outS + ', backed ' + backS + ')</code><br>The guard stopped it <b>before any tokens moved</b>, so you don\'t even waste gas.';
     } else {
       verdictEl.className = "sd-verdict show bad";
-      verdictEl.innerHTML = '<span class="vh">Quote returns phantom depth</span>' +
-        "Quote returns <code>" + outS + "</code> (phantom). Execution reverts: <code>SafeTransferFromFailed</code> — the maker holds only " +
-        backS + ". You paid gas for nothing." +
-        '<span class="note">This is what happens on Aqua today, without the guard.</span>';
+      verdictEl.innerHTML = '<span class="vh">The quote is phantom</span>The quote says <code>' + outS + '</code>, but try to fill it and it reverts (<code>SafeTransferFromFailed</code>) because the maker only holds ' + backS + '. You just burned gas for nothing.<span class="note">This is what actually happens on Aqua today, with no guard.</span>';
     }
   }
+  function firstFail(steps) { for (var i = 0; i < steps.length; i++) if (steps[i].state === "fail") return i; return steps.length; }
 
   function runTrace(over, guard, p, out, backing, label) {
-    var mine = ++runToken;
-    clearTimers();
+    var mine = ++runToken; clearTimers();
     var steps = buildSteps(over, guard);
-    // render all queued first
     stepsEl.innerHTML = "";
     var nodes = steps.map(function (s) { var n = renderStep(s, false); stepsEl.appendChild(n); return n; });
-
-    backingEl.textContent = "Backing " + label + ": " + fmtAmt(backing, p.decimals) + " " + p.symbol +
-      " ≈ $" + Math.round(backing * (p.priceUsd || 0)).toLocaleString("en-US") + " · min(wallet, allowance→Aqua)";
+    backingEl.textContent = "Backing " + label + ": " + fmtAmt(backing, p.decimals) + " " + p.symbol + " ≈ $" + Math.round(backing * (p.priceUsd || 0)).toLocaleString("en-US") + " · min(wallet, allowance→Aqua)";
 
     function reveal(i) {
-      if (i >= steps.length) {
-        showVerdict(over, guard, p, out, backing, over && guard);
-        runBtn.disabled = false; runBtn.textContent = "Simulate swap";
-        return;
-      }
+      if (i >= steps.length) { showVerdict(over, guard, p, out, backing); runBtn.disabled = false; runBtn.textContent = "Simulate swap"; return; }
       var s = steps[i];
       nodes[i].className = "sd-step show " + s.state;
       nodes[i].querySelector(".tick").innerHTML = s.state === "fail" ? CROSS : TICK;
       nodes[i].querySelector(".stat").textContent = s.stat;
       if (s.state === "fail") {
-        // halt: mark remaining as skipped, then verdict
-        for (var j = i + 1; j < steps.length; j++) {
-          nodes[j].className = "sd-step show skipped";
-          nodes[j].querySelector(".stat").textContent = "not reached";
-        }
-        timers.push(setTimeout(function () {
-          if (mine !== runToken) return;
-          showVerdict(over, guard, p, out, backing, over && guard);
-          runBtn.disabled = false; runBtn.textContent = "Simulate swap";
-        }, 380));
+        for (var j = i + 1; j < steps.length; j++) { nodes[j].className = "sd-step show skipped"; nodes[j].querySelector(".stat").textContent = "not reached"; }
+        timers.push(setTimeout(function () { if (mine !== runToken) return; showVerdict(over, guard, p, out, backing); runBtn.disabled = false; runBtn.textContent = "Simulate swap"; }, 380));
         return;
       }
       timers.push(setTimeout(function () { if (mine === runToken) reveal(i + 1); }, 420));
     }
-
     if (reduce) {
       steps.forEach(function (s, i) {
-        var stopHere = s.state === "fail";
         nodes[i].className = "sd-step show " + (i > firstFail(steps) ? "skipped" : s.state);
         nodes[i].querySelector(".tick").innerHTML = s.state === "fail" ? CROSS : (i > firstFail(steps) ? DOT : TICK);
         nodes[i].querySelector(".stat").textContent = (i > firstFail(steps)) ? "not reached" : s.stat;
       });
-      showVerdict(over, guard, p, out, backing, over && guard);
-      runBtn.disabled = false; runBtn.textContent = "Simulate swap";
-    } else {
-      reveal(0);
-    }
-  }
-
-  function firstFail(steps) {
-    for (var i = 0; i < steps.length; i++) if (steps[i].state === "fail") return i;
-    return steps.length; // no fail
+      showVerdict(over, guard, p, out, backing); runBtn.disabled = false; runBtn.textContent = "Simulate swap";
+    } else { reveal(0); }
   }
 
   runBtn.addEventListener("click", function () {
@@ -1323,21 +885,14 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
     backingEl.textContent = "Reading the maker's live backing on-chain…";
     var out = amountOut();
     liveBacking(p.maker, p.token, p.decimals, BigInt(p.backed)).then(function (res) {
-      liveCache[idx] = res;                     // same read powers the hint + on-card figure
-      hintToken++;                              // supersede any in-flight refreshLive for this read
-      var backing = backingNum(p, res);
-      var over = out > backing;
-      if (posSel.selectedIndex === idx) {       // only touch the card if still this position
-        renderCover(p, res);
-        setHint(p, res);                        // keep the hint consistent with the verdict below
-      }
+      liveCache[idx] = res; hintToken++;
+      var backing = backingNum(p, res), over = out > backing;
+      if (posSel.selectedIndex === idx) { renderCover(p, res); setHint(p, res); }
       runTrace(over, guardOn, p, out, backing, backingLabel(res));
     });
   });
 
-  // ---- init ----
-  updateReceive();
-  refreshLive();
+  updateReceive(); refreshLive();
 })();
 </script>
 </body>
