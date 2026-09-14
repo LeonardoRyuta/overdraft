@@ -593,11 +593,15 @@ cd contracts &amp;&amp; forge test -vv</code></pre>
       : d.chain === "arbitrum" ? "https://arbiscan.io/address/"
       : "https://etherscan.io/address/";
 
-    var shown = d.real.slice(0, 200);
+    // Worst coverage first; among equal coverage (e.g. the hundreds at 0%), biggest phantom first.
+    var shown = d.real.slice().sort(function (a, b) {
+      var ra = a.ratio == null ? Infinity : a.ratio, rb = b.ratio == null ? Infinity : b.ratio;
+      return ra - rb || (b.usdPhantom || 0) - (a.usdPhantom || 0);
+    });
     $("rows").innerHTML = shown.map(function (r) {
       var pctv = r.ratio == null ? null : Math.min(r.ratio, 1.5);
       var w = pctv == null ? 0 : Math.min(100, (pctv / 1.5) * 100);
-      var covTxt = r.ratio == null ? "n/a" : (r.ratio * 100).toFixed(1) + "%";
+      var covTxt = r.ratio == null ? "n/a" : r.ratio >= 10 ? ">999%" : (r.ratio * 100).toFixed(1) + "%";
       return '<tr>' +
         '<td class="l maker"><a href="' + explorer + r.maker + '" target="_blank" rel="noopener">' + shortAddr(r.maker) + '</a></td>' +
         '<td class="l">' + (r.symbol || "?") + '</td>' +
